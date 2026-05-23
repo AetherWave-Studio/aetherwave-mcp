@@ -1,0 +1,58 @@
+{
+  "name": "@aetherwave/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for AetherWave Studio - one tool surface for music, image, video, and audio generation across Suno, Grok Imagine, Seedance, Kling, Hailuo, Wan, VEO, Ideogram, GPT Image 2, and more.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "aetherwave-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "cursor",
+    "ai",
+    "music-generation",
+    "image-generation",
+    "video-generation",
+    "suno",
+    "aetherwave"
+  ],
+  "author": "AetherWave Studio",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AetherWave-Studio/aetherwave-mcp.git"
+  },
+  "homepage": "https://aetherwavestudio.com/developers",
+  "bugs": {
+    "url": "https://github.com/AetherWave-Studio/aetherwave-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
