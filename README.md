@@ -1,4 +1,4 @@
-# @aetherwave/mcp
+# @aetherwave-studio/mcp
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate music, images, videos, and complete band identities through a single tool surface.
 
@@ -26,7 +26,7 @@ Add to `~/.claude/mcp.json` (or per-project `.claude/mcp.json`):
   "mcpServers": {
     "aetherwave": {
       "command": "npx",
-      "args": ["-y", "@aetherwave/mcp"],
+      "args": ["-y", "@aetherwave-studio/mcp"],
       "env": {
         "AETHERWAVE_API_KEY": "aw_live_..."
       }
@@ -46,7 +46,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "aetherwave": {
       "command": "npx",
-      "args": ["-y", "@aetherwave/mcp"],
+      "args": ["-y", "@aetherwave-studio/mcp"],
       "env": {
         "AETHERWAVE_API_KEY": "aw_live_..."
       }
@@ -65,7 +65,7 @@ In Cursor Settings -> MCP -> Add new server:
 {
   "aetherwave": {
     "command": "npx",
-    "args": ["-y", "@aetherwave/mcp"],
+    "args": ["-y", "@aetherwave-studio/mcp"],
     "env": { "AETHERWAVE_API_KEY": "aw_live_..." }
   }
 }
@@ -79,7 +79,7 @@ In your `~/.continue/config.yaml`:
 mcpServers:
   - name: aetherwave
     command: npx
-    args: ["-y", "@aetherwave/mcp"]
+    args: ["-y", "@aetherwave-studio/mcp"]
     env:
       AETHERWAVE_API_KEY: aw_live_...
 ```
@@ -89,7 +89,7 @@ mcpServers:
 This is a standard stdio MCP server. Any client that speaks JSON-RPC 2.0 over stdio per the [MCP spec](https://spec.modelcontextprotocol.io/) can connect. Launch with:
 
 ```bash
-AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave/mcp
+AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 ```
 
 ## Tools
