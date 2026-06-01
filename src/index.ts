@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -215,7 +215,7 @@ async function main() {
     {
       title: "Edit image with AI (I2I)",
       description:
-        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'gpt-image-1' (high fidelity, multi-edit). Use list_image_models to see all I2I-capable models — Wan 2.5 Spicy, Seedream V4 Edit, Flux Kontext Pro/Flex, Qwen Edit, Grok Imagine I2I.",
+        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'gpt-image-2-t2i' (auto-switches to I2I when an image is provided). Use list_image_models to see all I2I-capable models — Wan 2.5 Spicy ('wan-2.5-spicy-i2i'), Seedream V4 Edit ('seedream-v4-edit'), Flux Kontext ('flux-kontext-pro'), Qwen Edit ('qwen-edit'), Grok Imagine I2I ('grok-imagine-i2i'), GPT Image 1.5 I2I ('gpt-image-1.5-i2i').",
       inputSchema: {
         prompt: z.string().describe("Text description of the edit (e.g. 'replace the sky with sunset clouds')."),
         imageUrl: z
@@ -226,7 +226,7 @@ async function main() {
           .string()
           .optional()
           .describe(
-            "Model ID. Defaults to 'gpt-image-1'. Common options: 'wan-2.5-spicy-i2i', 'seedream-v4-edit', 'flux-kontext-pro', 'qwen-edit', 'grok-imagine-i2i'. Use list_image_models for the full list.",
+            "Model ID. Defaults to 'gpt-image-2-t2i' (auto-switches to I2I with reference image). Common options: 'wan-2.5-spicy-i2i', 'seedream-v4-edit', 'flux-kontext-pro', 'qwen-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i'. Use list_image_models for the full list.",
           ),
         aspectRatio: z
           .string()
@@ -264,7 +264,7 @@ async function main() {
           submitBody: {
             prompt: args.prompt,
             imageUrl: args.imageUrl,
-            model: args.model || "gpt-image-1",
+            model: args.model || "gpt-image-2-t2i",
             aspectRatio: args.aspectRatio,
             resolution: args.resolution,
             quality: args.quality,
@@ -357,11 +357,22 @@ async function main() {
     },
     async (args) => {
       try {
+        // Ideogram V3 Reframe only accepts preset image_size names. Translate
+        // human-readable aspect ratios into Ideogram's allowed presets so the
+        // upstream call doesn't 422.
+        const presetMap: Record<string, string> = {
+          "1:1": "square_hd",
+          "16:9": "landscape_16_9",
+          "9:16": "portrait_16_9",
+          "4:3": "landscape_4_3",
+          "3:4": "portrait_4_3",
+        };
+        const imageSize = presetMap[args.aspectRatio] || args.aspectRatio;
         const { status, taskId } = await client.submitAndPoll<any>({
           submitPath: "/api/reframe-image",
           submitBody: {
             imageUrl: args.imageUrl,
-            aspectRatio: args.aspectRatio,
+            image_size: imageSize,
             speed: (args.speed || "balanced").toUpperCase(),
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
