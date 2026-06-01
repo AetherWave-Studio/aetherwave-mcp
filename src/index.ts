@@ -209,6 +209,179 @@ async function main() {
     },
   );
 
+  // ─── edit image (I2I via Wan 2.5 Spicy, GPT Image 2, Seedream V4 Edit, Flux Kontext, etc.) ─
+  server.registerTool(
+    "aetherwave_edit_image",
+    {
+      title: "Edit image with AI (I2I)",
+      description:
+        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'gpt-image-1' (high fidelity, multi-edit). Use list_image_models to see all I2I-capable models — Wan 2.5 Spicy, Seedream V4 Edit, Flux Kontext Pro/Flex, Qwen Edit, Grok Imagine I2I.",
+      inputSchema: {
+        prompt: z.string().describe("Text description of the edit (e.g. 'replace the sky with sunset clouds')."),
+        imageUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source image to edit. Must be a real, fetchable URL."),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            "Model ID. Defaults to 'gpt-image-1'. Common options: 'wan-2.5-spicy-i2i', 'seedream-v4-edit', 'flux-kontext-pro', 'qwen-edit', 'grok-imagine-i2i'. Use list_image_models for the full list.",
+          ),
+        aspectRatio: z
+          .string()
+          .optional()
+          .describe("Output aspect ratio (e.g. '1:1', '16:9'). Defaults to the source ratio for most models."),
+        resolution: z
+          .string()
+          .optional()
+          .describe("Output resolution. Tiered-pricing models accept '1K' / '2K'."),
+        quality: z
+          .enum(["low", "medium", "high"])
+          .optional()
+          .describe("Quality preset for models that support it (e.g. GPT Image 2)."),
+        maxImages: z
+          .number()
+          .int()
+          .min(1)
+          .max(8)
+          .optional()
+          .describe("Number of variations to return for multi-output models."),
+        renderingSpeed: z
+          .enum(["turbo", "balanced", "quality"])
+          .optional()
+          .describe("Rendering speed preset for models that support it."),
+        negative_prompt: z
+          .string()
+          .optional()
+          .describe("What to avoid in the output (supported by some models)."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/edit-image",
+          submitBody: {
+            prompt: args.prompt,
+            imageUrl: args.imageUrl,
+            model: args.model || "gpt-image-1",
+            aspectRatio: args.aspectRatio,
+            resolution: args.resolution,
+            quality: args.quality,
+            maxImages: args.maxImages,
+            renderingSpeed: args.renderingSpeed,
+            negative_prompt: args.negative_prompt,
+          },
+          statusPath: (id) => `/api/generate-image/status/${id}`,
+          timeoutMs: 6 * 60_000,
+          pollIntervalMs: 2_500,
+          successStates: ["success", "complete", "completed", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          state: status.state || status.status,
+          images: status.images || [],
+          autoSaved: status.autoSaved ?? null,
+          creationIds: status.creationIds || [],
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── upscale image (Topaz) ───────────────────────────────────────────────
+  server.registerTool(
+    "aetherwave_upscale_image",
+    {
+      title: "Upscale image (Topaz)",
+      description:
+        "Upscales a source image using Topaz's high-fidelity upscaler. Pass a public `imageUrl` and an `upscaleFactor`. Credit cost depends on the source resolution × factor; small images cost less than large ones at the same factor. Returns the upscaled image URL.",
+      inputSchema: {
+        imageUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source image."),
+        upscaleFactor: z
+          .enum(["1x", "2x", "4x", "8x"])
+          .optional()
+          .describe("Upscale multiplier. Defaults to '2x'. '8x' is heavy — use only on small sources."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/upscale-image",
+          submitBody: {
+            imageUrl: args.imageUrl,
+            upscaleFactor: args.upscaleFactor || "2x",
+          },
+          statusPath: (id) => `/api/generate-image/status/${id}`,
+          timeoutMs: 6 * 60_000,
+          pollIntervalMs: 2_500,
+          successStates: ["success", "complete", "completed", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          state: status.state || status.status,
+          images: status.images || [],
+          autoSaved: status.autoSaved ?? null,
+          creationIds: status.creationIds || [],
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── reframe image (Ideogram V3) ─────────────────────────────────────────
+  server.registerTool(
+    "aetherwave_reframe_image",
+    {
+      title: "Reframe image to a new aspect ratio (Ideogram V3 Reframe)",
+      description:
+        "Reframes an image to a new aspect ratio by intelligently outpainting the edges. Pass a public `imageUrl` and the target `aspectRatio` ('16:9', '9:16', '1:1', '4:3', '3:4', etc.). Three speed tiers: 'turbo' (5 cr, fast), 'balanced' (10 cr, default), 'quality' (14 cr, slowest, best edges). Returns the reframed image URL.",
+      inputSchema: {
+        imageUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source image."),
+        aspectRatio: z
+          .string()
+          .describe("Target aspect ratio (e.g. '16:9', '9:16', '1:1', '4:3', '3:4', '21:9')."),
+        speed: z
+          .enum(["turbo", "balanced", "quality"])
+          .optional()
+          .describe("Rendering speed. 'turbo'=5cr, 'balanced'=10cr (default), 'quality'=14cr."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/reframe-image",
+          submitBody: {
+            imageUrl: args.imageUrl,
+            aspectRatio: args.aspectRatio,
+            speed: (args.speed || "balanced").toUpperCase(),
+          },
+          statusPath: (id) => `/api/generate-image/status/${id}`,
+          timeoutMs: 6 * 60_000,
+          pollIntervalMs: 2_500,
+          successStates: ["success", "complete", "completed", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          state: status.state || status.status,
+          images: status.images || [],
+          autoSaved: status.autoSaved ?? null,
+          creationIds: status.creationIds || [],
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
   // ─── generate video (submit + poll + return URL) ─────────────────────────
   server.registerTool(
     "aetherwave_generate_video",
