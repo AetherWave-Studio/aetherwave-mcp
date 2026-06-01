@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -215,7 +215,7 @@ async function main() {
     {
       title: "Edit image with AI (I2I)",
       description:
-        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'gpt-image-2-t2i' (auto-switches to I2I when an image is provided). Use list_image_models to see all I2I-capable models — Wan 2.5 Spicy ('wan-2.5-spicy-i2i'), Seedream V4 Edit ('seedream-v4-edit'), Flux Kontext ('flux-kontext-pro'), Qwen Edit ('qwen-edit'), Grok Imagine I2I ('grok-imagine-i2i'), GPT Image 1.5 I2I ('gpt-image-1.5-i2i').",
+        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'seedream-v4-edit' (fast, explicit edit purpose, ~30s). Other I2I-capable models: 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream — prefer clean URLs.",
       inputSchema: {
         prompt: z.string().describe("Text description of the edit (e.g. 'replace the sky with sunset clouds')."),
         imageUrl: z
@@ -226,7 +226,7 @@ async function main() {
           .string()
           .optional()
           .describe(
-            "Model ID. Defaults to 'gpt-image-2-t2i' (auto-switches to I2I with reference image). Common options: 'wan-2.5-spicy-i2i', 'seedream-v4-edit', 'flux-kontext-pro', 'qwen-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i'. Use list_image_models for the full list.",
+            "Model ID. Defaults to 'seedream-v4-edit' (fast, ~30s). Other options: 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i'. Use list_image_models for the full list.",
           ),
         aspectRatio: z
           .string()
@@ -264,7 +264,7 @@ async function main() {
           submitBody: {
             prompt: args.prompt,
             imageUrl: args.imageUrl,
-            model: args.model || "gpt-image-2-t2i",
+            model: args.model || "seedream-v4-edit",
             aspectRatio: args.aspectRatio,
             resolution: args.resolution,
             quality: args.quality,
@@ -273,7 +273,7 @@ async function main() {
             negative_prompt: args.negative_prompt,
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
-          timeoutMs: 6 * 60_000,
+          timeoutMs: 10 * 60_000,
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
