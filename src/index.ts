@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.5";
+const VERSION = "0.1.6";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -136,7 +136,32 @@ async function main() {
     {
       title: "Generate image (Grok Imagine, GPT Image 2, Seedream V4, Wan, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo)",
       description:
-        "Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 6 images per generation, 5 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass `referenceImages` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').",
+        `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 6 images per generation, 5 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
+
+## Model selection guide (when the user does not specify a model)
+
+Default: \`grok-imagine-t2i\` (5 cr, 6 outputs per call, fast, general purpose).
+
+Pick a different model when the prompt has these signals:
+
+- "photoreal" / "photo of" / "realistic"     -> \`z-image-turbo\` (3 cr, fastest, single output) or \`imagen-4\` (medium cost, very high quality)
+- "highest quality" / "premium" / no budget  -> \`grok-imagine-quality-t2i\` (16 cr at 1K, 22 cr at 2K) or \`imagen-4-ultra\`
+- Text inside the image (signs, posters, typography) -> \`ideogram-v3-t2i\` (best in class) or \`gpt-image-2-t2i\` (also strong)
+- Artistic / painterly / stylized            -> \`midjourney-t2i\`
+- Album art / cover art                      -> \`grok-imagine-t2i\` (default fine); use \`seedream-v4-t2i\` if 4K wanted
+- Logo or design with embedded text          -> \`ideogram-v3-t2i\`
+- NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
+- Cheapest possible / quick test             -> \`z-image-turbo\` (3 cr)
+- Multiple variations to compare             -> keep \`grok-imagine-t2i\` (6 outputs default) or use \`numImages\` on a multi-output model
+
+For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer (\`midjourney-i2i\`), premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
+
+Always pass an explicit \`aspectRatio\` (e.g. "1:1" for square album art, "16:9" for video thumbnails, "9:16" for shorts/reels). Some upstream providers reject submissions with no aspect ratio.
+
+Ask the user only when:
+- The prompt contradicts itself (e.g., "highest quality but cheapest")
+- The user requested "the best model" with no context, surface 2-3 options with tradeoffs
+- A single generation would cost more than 20 credits and the user has not confirmed`,
       inputSchema: {
         prompt: z.string().describe("Text description of the image to generate."),
         model: z
@@ -215,7 +240,21 @@ async function main() {
     {
       title: "Edit image with AI (I2I)",
       description:
-        "Edits an existing image guided by a text prompt. Pass a public `imageUrl` plus a `prompt` describing the change (\"add a moon to the sky\", \"swap the background for a neon city\", \"make it look like a comic panel\"). Submits, polls, and returns the edited image URL(s). Default model is 'seedream-v4-edit' (fast, explicit edit purpose, ~30s). Other I2I-capable models: 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream — prefer clean URLs.",
+        `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (6 cr per call, returns 2 variations, ~30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
+
+## Model selection guide for edits
+
+Default: \`grok-imagine-i2i\` (6 cr per call, returns 2 variations = 3 cr/image effective, fast ~30s, strong general-purpose edit quality).
+
+Pick a different model when:
+
+- Need a single deterministic output, or 4K resolution           -> \`seedream-v4-edit\` (7 cr per image, supports 1K/2K/4K, multi-image up to 6)
+- Subtle edits / preserve composition / character consistency   -> \`flux-kontext-pro\` or \`flux-kontext-max\`
+- NSFW edits                                                    -> \`wan-2.5-spicy-i2i\`
+- Highest quality, time is not a concern (~5 min OK)            -> \`gpt-image-1.5-i2i\` or \`grok-imagine-quality-i2i\` (16 cr @ 1K, 22 cr @ 2K)
+- Stylized / artistic transformation                            -> \`midjourney-i2i\`
+
+If the user simply says "edit this image" with no other signal, default to \`grok-imagine-i2i\`.`,
       inputSchema: {
         prompt: z.string().describe("Text description of the edit (e.g. 'replace the sky with sunset clouds')."),
         imageUrl: z
@@ -226,7 +265,7 @@ async function main() {
           .string()
           .optional()
           .describe(
-            "Model ID. Defaults to 'seedream-v4-edit' (fast, ~30s). Other options: 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'grok-imagine-i2i', 'gpt-image-1.5-i2i'. Use list_image_models for the full list.",
+            "Model ID. Defaults to 'grok-imagine-i2i' (3 cr/image effective, 2 outputs). Other options: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i', 'grok-imagine-quality-i2i'. Use list_image_models for the full list.",
           ),
         aspectRatio: z
           .string()
@@ -264,7 +303,7 @@ async function main() {
           submitBody: {
             prompt: args.prompt,
             imageUrl: args.imageUrl,
-            model: args.model || "seedream-v4-edit",
+            model: args.model || "grok-imagine-i2i",
             aspectRatio: args.aspectRatio,
             resolution: args.resolution,
             quality: args.quality,
