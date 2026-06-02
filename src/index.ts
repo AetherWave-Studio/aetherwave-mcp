@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.4";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -327,6 +327,43 @@ async function main() {
           images: status.images || [],
           autoSaved: status.autoSaved ?? null,
           creationIds: status.creationIds || [],
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── remove background (Recraft) ─────────────────────────────────────────
+  server.registerTool(
+    "aetherwave_remove_background",
+    {
+      title: "Remove background from image (Recraft)",
+      description:
+        "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image.",
+      inputSchema: {
+        imageUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source image."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/remove-background",
+          submitBody: {
+            imageUrl: args.imageUrl,
+          },
+          statusPath: (id) => `/api/generate-image/status/${id}`,
+          timeoutMs: 6 * 60_000,
+          pollIntervalMs: 2_500,
+          successStates: ["success", "complete", "completed", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          state: status.state || status.status,
+          images: status.data?.images || status.images || [],
         });
       } catch (err) {
         return errorResult(err);
