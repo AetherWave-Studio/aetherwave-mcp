@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.6";
+const VERSION = "0.1.7";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -104,6 +104,25 @@ async function main() {
     async () => {
       try {
         const data = await client.get<any>("/api/image/models", "public");
+        return jsonResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── list master presets ─────────────────────────────────────────────────
+  server.registerTool(
+    "aetherwave_list_master_presets",
+    {
+      title: "List available audio mastering presets",
+      description:
+        "Returns every AI mastering preset AetherWave supports, with target LUFS, tags, descriptions, and difficulty level. Call this before master_audio when you don't know which preset fits the track. 12 presets total covering streaming, hip hop, EDM, pop, rock, lo-fi, R&B, acoustic, cinematic, podcast, gentle, and loud-and-punchy mastering styles. Each preset has a target LUFS value (e.g. -14 for streaming, -9 for loud) so you can match the user's distribution target.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const data = await client.get<any>("/api/master-presets", "public");
         return jsonResult(data);
       } catch (err) {
         return errorResult(err);
@@ -659,7 +678,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     {
       title: "Master an audio track (AI mastering)",
       description:
-        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Currently FREE for everyone through the holiday promo window. Pick a `preset` to steer the mastering style — call /api/master-presets for the live list, common choices include 'general', 'vocal-forward', 'bass-heavy', 'mastered-loud'.",
+        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Currently FREE for everyone through the holiday promo window. Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.",
       inputSchema: {
         audioUrl: z
           .string()
