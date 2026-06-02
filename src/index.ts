@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.4";
+const VERSION = "0.1.5";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -620,31 +620,92 @@ async function main() {
     {
       title: "Master an audio track (AI mastering)",
       description:
-        "Submits an audio file for AI mastering and returns the mastered version. Useful as a final polish step after music generation.",
+        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Currently FREE for everyone through the holiday promo window. Pick a `preset` to steer the mastering style — call /api/master-presets for the live list, common choices include 'general', 'vocal-forward', 'bass-heavy', 'mastered-loud'.",
       inputSchema: {
         audioUrl: z
           .string()
           .url()
-          .describe("Public URL to the source audio file."),
-        intensity: z
-          .enum(["light", "medium", "heavy"])
+          .describe("Public URL to the source audio file (MP3 or WAV)."),
+        preset: z
+          .string()
+          .describe(
+            "Mastering preset name. Common values: 'general', 'vocal-forward', 'bass-heavy', 'mastered-loud'.",
+          ),
+        trackTitle: z
+          .string()
           .optional()
-          .describe("Mastering intensity. Default 'medium'."),
+          .describe("Optional title for the mastered output (used in gallery row label)."),
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
-          submitPath: "/api/master-audio",
-          submitBody: {
-            audioUrl: args.audioUrl,
-            intensity: args.intensity || "medium",
-          },
-          statusPath: (id) => `/api/master-audio/status/${id}`,
-          timeoutMs: 8 * 60_000,
-          pollIntervalMs: 4_000,
+        const data = await client.post<any>("/api/master-audio", {
+          audioUrl: args.audioUrl,
+          preset: args.preset,
+          trackTitle: args.trackTitle,
         });
-        return jsonResult({ taskId, ...status });
+        return jsonResult({
+          success: data.success,
+          masteredUrl: data.masteredUrl,
+          preset: data.preset,
+          trackTitle: data.trackTitle,
+          creditsCharged: data.creditsCharged,
+          isFree: data.isFree,
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── list user creations (gallery read) ──────────────────────────────────
+  server.registerTool(
+    "aetherwave_list_my_creations",
+    {
+      title: "List my AetherWave gallery items",
+      description:
+        "Returns items from the authenticated user's gallery — images, videos, audio tracks they've generated on AetherWave. Useful for agent workflows like 'find my last 5 images and reframe them all to 9:16' or 'list my recent songs and master each one'. Supports pagination and type filtering. Each item includes id, type, prompt, model, contentUrl, thumbnailUrl, createdAt, isFavorite, visibility, rating, and type-specific fields (duration for audio/video, width/height for images).",
+      inputSchema: {
+        type: z
+          .enum(["image", "video", "audio"])
+          .optional()
+          .describe("Filter to a single media type. Omit for all types."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Max items to return. Defaults to 100, max 500."),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("Pagination offset. Defaults to 0."),
+        favoritesOnly: z
+          .boolean()
+          .optional()
+          .describe("If true, only return items marked as favorite."),
+      },
+    },
+    async (args) => {
+      try {
+        const params = new URLSearchParams();
+        if (args.type) params.set("type", args.type);
+        if (args.limit) params.set("limit", String(args.limit));
+        if (args.offset) params.set("offset", String(args.offset));
+        if (args.favoritesOnly) params.set("favorites", "true");
+        const qs = params.toString();
+        const path = qs ? `/api/user/gallery?${qs}` : "/api/user/gallery";
+        const data = await client.get<any>(path);
+        return jsonResult({
+          items: data.items || [],
+          total: data.total,
+          offset: data.offset,
+          limit: data.limit,
+          hasMore: data.hasMore,
+        });
       } catch (err) {
         return errorResult(err);
       }
