@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.4";
+const VERSION = "0.2.5";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -557,7 +557,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     {
       title: "Remove background from video",
       description:
-        "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. FREE (0 credits) - runs on AetherWave's own infrastructure, no external API spend. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
+        "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. 2 credits per second. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
       inputSchema: {
         videoUrl: z
           .string()

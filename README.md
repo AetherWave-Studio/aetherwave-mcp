@@ -103,7 +103,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_reframe_image` | Ideogram V3 Reframe to a new aspect ratio (outpaints edges) |
 | `aetherwave_remove_background` | Recraft primary + fal BiRefNet v2 fallback (auto failover). Output auto-saved to gallery |
 | `aetherwave_upscale_video` | Atlas Video Upscaler, 1080p or 2K |
-| `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output |
+| `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output. 2 cr/sec |
 | `aetherwave_reframe_video` | Luma Ray 2 Flash reframe to new aspect ratio |
 | `aetherwave_master_audio` | AI mastering across 12 genre/style presets. 20 cr/track, free on Producer / Mogul / Ultimate plans |
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
@@ -256,7 +256,7 @@ Atlas Video Upscaler. Targets 1080p or 2K.
 
 ### `aetherwave_remove_background_video`
 
-Frame-by-frame background removal via rembg u2netp on AetherWave's Python service. ~10 cr/sec.
+Frame-by-frame background removal via rembg u2netp on AetherWave's Python service. 2 cr/sec.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
