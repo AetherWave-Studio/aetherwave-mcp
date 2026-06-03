@@ -105,7 +105,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_upscale_video` | Atlas Video Upscaler, 1080p or 2K |
 | `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output |
 | `aetherwave_reframe_video` | Luma Ray 2 Flash reframe to new aspect ratio |
-| `aetherwave_master_audio` | AI mastering across 12 genre/style presets. FREE during the holiday promo |
+| `aetherwave_master_audio` | AI mastering across 12 genre/style presets. 20 cr/track, free on Producer / Mogul / Ultimate plans |
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
 
 Every generation tool includes a model-selection rubric in its description. Your agent can pick the right model from prompt intent without round-tripping `list_image_models` or `list_video_models`.
@@ -280,7 +280,7 @@ Luma Ray 2 Flash reframe to a new aspect ratio. 17 cr/sec.
 
 ### `aetherwave_master_audio`
 
-AI mastering via the AetherWave Python service. Synchronous response (route polls internally, expect 30s-5min). Currently FREE through the holiday promo window. Output auto-rehosted to Cloudflare R2.
+AI mastering via the AetherWave Python service. Synchronous response (route polls internally, expect 30s-5min). 20 credits per track. Free for Producer, Mogul, and Ultimate plans. Output is WAV (~50MB per 3-min track) and auto-rehosted to Cloudflare R2.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
@@ -331,7 +331,7 @@ Typical costs:
 - **Image utility** - 5 cr (background removal, reframe at turbo speed), 5-25+ cr (Topaz upscale, resolution-dependent)
 - **Video** - 4-6 cr/sec (Grok Imagine) up to ~80 cr/sec (VEO 3.1)
 - **Music** - 12 cr per generation (2 tracks)
-- **Mastering** - FREE during holiday promo
+- **Mastering** - 20 cr/track (free on Producer / Mogul / Ultimate)
 
 See live pricing at https://aetherwavestudio.com/buy-credits or via `aetherwave_list_*_models`.
 

@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -557,7 +557,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     {
       title: "Remove background from video",
       description:
-        "Strips the background from a video frame-by-frame using rembg (u2netp). Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. ~10 credits per second. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
+        "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. FREE (0 credits) - runs on AetherWave's own infrastructure, no external API spend. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
       inputSchema: {
         videoUrl: z
           .string()
@@ -772,7 +772,7 @@ Ask the user only when:
     {
       title: "Generate music (Suno)",
       description:
-        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget.",
+        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. Note: the `title` param is advisory for instrumentals - Suno often writes its own title from the prompt content for instrumental generations. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version.",
       inputSchema: {
         prompt: z
           .string()
@@ -832,7 +832,7 @@ Ask the user only when:
     {
       title: "Master an audio track (AI mastering)",
       description:
-        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Currently FREE for everyone through the holiday promo window. Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.",
+        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Cost: 20 credits per track. Producer, Mogul, and Ultimate plans get mastering free. Output is WAV (~50MB per 3-minute track, lossless for redistribution). Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.",
       inputSchema: {
         audioUrl: z
           .string()
