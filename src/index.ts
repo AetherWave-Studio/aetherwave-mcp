@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.7";
+const VERSION = "0.1.8";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -203,7 +203,7 @@ Ask the user only when:
           .describe(
             "Array of public image URLs for image-to-image generation. Required when using an I2I model.",
           ),
-        numImages: z
+        numImages: z.coerce
           .number()
           .int()
           .min(1)
@@ -214,7 +214,7 @@ Ask the user only when:
           .string()
           .optional()
           .describe("What to avoid in the output (supported by some models)."),
-        seed: z
+        seed: z.coerce
           .number()
           .int()
           .optional()
@@ -298,7 +298,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .enum(["low", "medium", "high"])
           .optional()
           .describe("Quality preset for models that support it (e.g. GPT Image 2)."),
-        maxImages: z
+        maxImages: z.coerce
           .number()
           .int()
           .min(1)
@@ -503,7 +503,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .describe(
             "Model ID. Defaults to 'grok-imagine-t2v'. Use list_video_models for the full list.",
           ),
-        duration: z
+        duration: z.coerce
           .number()
           .int()
           .min(2)
@@ -588,7 +588,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .describe(
             "Style/mood/topic description. E.g. 'Lo-fi ambient track, rain sounds, warm pads' or 'High-energy synthwave with driving bass'.",
           ),
-        instrumental: z
+        instrumental: z.coerce
           .boolean()
           .optional()
           .describe("If true, no vocals. Default false."),
@@ -728,20 +728,20 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .enum(["image", "video", "audio"])
           .optional()
           .describe("Filter to a single media type. Omit for all types."),
-        limit: z
+        limit: z.coerce
           .number()
           .int()
           .min(1)
           .max(500)
           .optional()
           .describe("Max items to return. Defaults to 100, max 500."),
-        offset: z
+        offset: z.coerce
           .number()
           .int()
           .min(0)
           .optional()
           .describe("Pagination offset. Defaults to 0."),
-        favoritesOnly: z
+        favoritesOnly: z.coerce
           .boolean()
           .optional()
           .describe("If true, only return items marked as favorite."),
