@@ -2,13 +2,14 @@
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
-One install. One token. Thirteen tools covering:
+One install. One token. Fifteen tools covering:
 
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo
 - **Image edit** - Grok Imagine I2I, Seedream V4 Edit, Flux Kontext, Wan 2.5 Spicy, Qwen Edit, Midjourney I2I, GPT Image 1.5
 - **Image utility** - Topaz upscale, Recraft background removal (with fal BiRefNet v2 fallback), Ideogram V3 Reframe
 - **Video** - Grok Imagine (KIE+fal fallback), Wan 2.7, Hailuo 02, Seedance Pro/Lite, Kling 2.6 (audio), VEO 3.1, Happy Horse
+- **Video utility** - Atlas upscaler (1080p/2K), rembg u2netp background removal, Luma Ray 2 Flash reframe
 - **Audio mastering** - 12 genre/style presets via the AetherWave Python service
 - **Gallery read** - paginated list of your saved creations
 
@@ -100,7 +101,10 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (3 cr/image effective, 2 variations) |
 | `aetherwave_upscale_image` | Topaz upscale 1x / 2x / 4x / 8x |
 | `aetherwave_reframe_image` | Ideogram V3 Reframe to a new aspect ratio (outpaints edges) |
-| `aetherwave_remove_background` | Recraft primary + fal BiRefNet v2 fallback (auto failover) |
+| `aetherwave_remove_background` | Recraft primary + fal BiRefNet v2 fallback (auto failover). Output auto-saved to gallery |
+| `aetherwave_upscale_video` | Atlas Video Upscaler, 1080p or 2K |
+| `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output |
+| `aetherwave_reframe_video` | Luma Ray 2 Flash reframe to new aspect ratio |
 | `aetherwave_master_audio` | AI mastering across 12 genre/style presets. FREE during the holiday promo |
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
 
@@ -239,6 +243,41 @@ Recraft primary + fal.ai BiRefNet v2 fallback. ~5 cr per image.
 
 **Returns:** `{ taskId, state, images }` (PNG with transparent alpha)
 
+### `aetherwave_upscale_video`
+
+Atlas Video Upscaler. Targets 1080p or 2K.
+
+| Param | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
+| `targetResolution` | enum | no | `1080p` | `1080p` (7 cr/s, ≤53s) or `2k` (9 cr/s, ≤23s). Source must be ≤30fps |
+
+**Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
+
+### `aetherwave_remove_background_video`
+
+Frame-by-frame background removal via rembg u2netp on AetherWave's Python service. ~10 cr/sec.
+
+| Param | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
+| `bgType` | enum | no | `transparent` | `transparent` = alpha WebM, `color` = solid replacement |
+| `customColor` | string | no | `#00ff00` | Hex color for solid replacement when `bgType: "color"` |
+
+**Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
+
+### `aetherwave_reframe_video`
+
+Luma Ray 2 Flash reframe to a new aspect ratio. 17 cr/sec.
+
+| Param | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
+| `reframeAspectRatio` | enum | yes | — | `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9` |
+| `reframePrompt` | string | no | — | Optional steering prompt for new edge content (e.g. "extend the sky with sunset clouds") |
+
+**Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
+
 ### `aetherwave_master_audio`
 
 AI mastering via the AetherWave Python service. Synchronous response (route polls internally, expect 30s-5min). Currently FREE through the holiday promo window. Output auto-rehosted to Cloudflare R2.
@@ -323,8 +362,8 @@ Ideogram's URL fetcher chokes on source URLs containing spaces, parentheses, or 
 **"internal error, please try again later" on remove_background**
 KIE Recraft transient outage. The tool will auto-fall-back to fal.ai BiRefNet v2 on retry, but a single call returning this error means both providers refused. Wait a minute and retry.
 
-**Soul Forge (`aetherwave_generate_band`) returning unexpected errors**
-This tool is currently dormant pending a server-side URL-input variant of the band-generation route. Use the web Soul Forge at https://aetherwavestudio.com/soul-forge while we ship the MCP-compatible variant.
+**Soul Forge band generation**
+Not exposed via MCP. Soul Forge remains a consumer feature on the web at https://aetherwavestudio.com/soul-forge.
 
 ## Versioning
 

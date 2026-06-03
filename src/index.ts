@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.1.8";
+const VERSION = "0.2.0";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -192,7 +192,7 @@ Ask the user only when:
         aspectRatio: z
           .string()
           .optional()
-          .describe("Aspect ratio (e.g. '1:1', '16:9', '9:16'). Default depends on the model."),
+          .describe("Aspect ratio (e.g. '1:1', '16:9', '9:16'). Pass this explicitly when possible; some upstream providers reject submissions without an aspect ratio. Default ratios vary by model."),
         resolution: z
           .string()
           .optional()
@@ -363,7 +363,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
         upscaleFactor: z
           .enum(["1x", "2x", "4x", "8x"])
           .optional()
-          .describe("Upscale multiplier. Defaults to '2x'. '8x' is heavy — use only on small sources."),
+          .describe("Upscale multiplier. Defaults to '2x'. '8x' is heavy; use only on small sources."),
       },
     },
     async (args) => {
@@ -396,9 +396,9 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_remove_background",
     {
-      title: "Remove background from image (Recraft)",
+      title: "Remove background from image (Recraft + fal.ai BiRefNet v2 fallback)",
       description:
-        "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image.",
+        "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image. Recraft is the primary provider; on outage the tool auto-falls back to fal.ai BiRefNet v2 so single-image calls never silently fail. Works best on photographic subjects (people, products, animals); transparent-PNG inputs have no foreground to segment.",
       inputSchema: {
         imageUrl: z
           .string()
@@ -488,13 +488,184 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     },
   );
 
+  // ─── upscale video (Atlas) ───────────────────────────────────────────────
+  server.registerTool(
+    "aetherwave_upscale_video",
+    {
+      title: "Upscale video (Atlas Video Upscaler)",
+      description:
+        "Upscales a source video to 1080p or 2K using Atlas. Pass a public `videoUrl` and the target resolution. Cost is per-second (7 cr/s @ 1080p, 9 cr/s @ 2K). Atlas-side limits: clips up to 53s at 1080p, 23s at 2K, source must be <=30fps. Returns the upscaled video URL (R2-hosted).",
+      inputSchema: {
+        videoUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source video (MP4)."),
+        targetResolution: z
+          .enum(["1080p", "2k"])
+          .optional()
+          .describe("Target output resolution. Defaults to '1080p'. '2k' is more expensive and limited to ~23s clips."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/video/edit",
+          submitBody: {
+            tool: "upscale",
+            videoUrl: args.videoUrl,
+            targetResolution: args.targetResolution || "1080p",
+          },
+          statusPath: (id) => `/api/video/edit/status/${id}`,
+          timeoutMs: 10 * 60_000,
+          pollIntervalMs: 3_000,
+          successStates: ["completed", "success", "complete", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          status: status.status,
+          videoUrl: status.resultUrl || null,
+          autoSaved: status.autoSaved ?? null,
+          creationId: status.creationId || null,
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── remove background video (Python service rembg u2netp) ───────────────
+  server.registerTool(
+    "aetherwave_remove_background_video",
+    {
+      title: "Remove background from video",
+      description:
+        "Strips the background from a video frame-by-frame using rembg (u2netp). Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. ~10 credits per second. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
+      inputSchema: {
+        videoUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source video (MP4)."),
+        bgType: z
+          .enum(["transparent", "color"])
+          .optional()
+          .describe("'transparent' = alpha WebM output (default). 'color' = solid replacement using customColor."),
+        customColor: z
+          .string()
+          .optional()
+          .describe("Hex color for solid background when bgType='color' (e.g. '#00ff00'). Default green."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/video/edit",
+          submitBody: {
+            tool: "background",
+            videoUrl: args.videoUrl,
+            bgType: args.bgType || "transparent",
+            customColor: args.customColor || "#00ff00",
+          },
+          statusPath: (id) => `/api/video/edit/status/${id}`,
+          timeoutMs: 15 * 60_000,
+          pollIntervalMs: 3_000,
+          successStates: ["completed", "success", "complete", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          status: status.status,
+          videoUrl: status.resultUrl || null,
+          autoSaved: status.autoSaved ?? null,
+          creationId: status.creationId || null,
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── reframe video (Luma Ray 2 Flash) ────────────────────────────────────
+  server.registerTool(
+    "aetherwave_reframe_video",
+    {
+      title: "Reframe video to a new aspect ratio (Luma Ray 2 Flash)",
+      description:
+        "Reframes a video to a new aspect ratio by intelligently outpainting/cropping the edges. Pass a public `videoUrl` and target `reframeAspectRatio`. 17 credits per second. Optional `reframePrompt` lets you steer the new edge content (e.g. 'extend the sky with sunset clouds'). Returns the reframed video URL (R2-hosted).",
+      inputSchema: {
+        videoUrl: z
+          .string()
+          .url()
+          .describe("Public URL of the source video (MP4)."),
+        reframeAspectRatio: z
+          .enum(["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"])
+          .describe("Target aspect ratio."),
+        reframePrompt: z
+          .string()
+          .optional()
+          .describe("Optional prompt to steer the new edge content."),
+      },
+    },
+    async (args) => {
+      try {
+        const { status, taskId } = await client.submitAndPoll<any>({
+          submitPath: "/api/video/edit",
+          submitBody: {
+            tool: "reframe",
+            videoUrl: args.videoUrl,
+            reframeAspectRatio: args.reframeAspectRatio,
+            reframePrompt: args.reframePrompt || "",
+          },
+          statusPath: (id) => `/api/video/edit/status/${id}`,
+          timeoutMs: 15 * 60_000,
+          pollIntervalMs: 3_000,
+          successStates: ["completed", "success", "complete", "succeeded", "done"],
+        });
+        return jsonResult({
+          taskId,
+          status: status.status,
+          videoUrl: status.resultUrl || null,
+          autoSaved: status.autoSaved ?? null,
+          creationId: status.creationId || null,
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
   // ─── generate video (submit + poll + return URL) ─────────────────────────
   server.registerTool(
     "aetherwave_generate_video",
     {
       title: "Generate video (Grok Imagine, Wan 2.7, Hailuo 02, Seedance, Kling 2.6, VEO 3.1, Happy Horse)",
       description:
-        "Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public `imageUrl`. Video generation can take 30s to several minutes - this tool polls with up to an 8-minute budget.",
+        `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation can take 30s to several minutes; this tool polls with up to an 8-minute budget.
+
+## Model selection guide for videos (when the user does not specify a model)
+
+Default: \`grok-imagine-t2v\` (4-6 cr/s, fast, has KIE -> fal.ai fallback for redundancy. Best general-purpose).
+
+Pick a different model when the prompt has these signals:
+
+- "highest quality" / "premium" / broadcast / commercial    -> \`veo3.1-quality\` or \`veo3-quality\` (Google's flagship, ~80 cr/s, 3-5 min)
+- "fast premium" / quick high-quality                       -> \`veo3-fast\` or \`veo3.1-fast\` (84 cr fixed for 8s)
+- Native audio inside the video (dialogue, foley, music)    -> \`kling-2.6-master-t2v\` (built-in audio generation)
+- Cinematic camera moves / dolly / pan                      -> \`seedance-pro-t2v\`
+- Realistic human motion / faces                            -> \`hailuo-2.3-pro-i2v\` (I2V, supply imageUrl)
+- Anime / stylized / fantasy                                -> \`wan-2.7-t2v\`
+- NSFW / adult                                              -> \`wan-2.2-spicy-i2v\` (I2V only; auto-tags adult)
+- Animate this exact image                                  -> any I2V variant (\`grok-imagine-i2v\`, \`seedance-pro-i2v\`, \`hailuo-2.3-pro-i2v\`)
+- First + last frame interpolation                          -> \`seedance-pro-i2v\` with both \`imageUrl\` + \`endImageUrl\`
+- Cheapest test                                             -> \`grok-imagine-t2v\` at 480p (4 cr/s, ~24 cr for 6s)
+- Clip 12-15s                                               -> \`grok-imagine-t2v\` (accepts up to 15s)
+- Long-form (16-30s)                                        -> \`wan-2.7-t2v\` (extended duration)
+
+**Cost framing:** resolution and duration drive cost more than model choice. A 6-second 480p Grok generation costs ~24 cr; the same prompt at 1080p VEO 3.1 Quality is ~480 cr. Pick the lowest acceptable resolution + duration first.
+
+**For I2V models:** \`imageUrl\` is required. For first+last-frame models, pass \`endImageUrl\` too.
+
+Ask the user only when:
+- Single generation would cost more than 100 credits and they haven't confirmed
+- They asked for "the best" with no other signal; surface 2-3 options with cost ranges`,
       inputSchema: {
         prompt: z.string().describe("Text description of the video scene."),
         model: z
@@ -635,43 +806,6 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     },
   );
 
-  // ─── band generation (Soul Forge) ────────────────────────────────────────
-  server.registerTool(
-    "aetherwave_generate_band",
-    {
-      title: "Generate band identity from a track (Soul Forge)",
-      description:
-        "Soul Forge: upload a track URL and get back a complete band identity - name, origin story, member roster, genre tags, and a collectible trading card with portrait. Single tool call, single round-trip. 50 credits. Great for AI-music-channel pipelines that need a 'band' persona attached to each track.",
-      inputSchema: {
-        audioUrl: z
-          .string()
-          .url()
-          .describe("Public URL to the audio file (MP3 or WAV)."),
-        genre: z
-          .string()
-          .optional()
-          .describe("Optional genre hint to steer the band identity."),
-      },
-    },
-    async (args) => {
-      try {
-        const { status, taskId } = await client.submitAndPoll<any>({
-          submitPath: "/api/band-generation",
-          submitBody: {
-            audioUrl: args.audioUrl,
-            genre: args.genre,
-          },
-          statusPath: (id) => `/api/band-generation/status/${id}`,
-          timeoutMs: 6 * 60_000,
-          pollIntervalMs: 4_000,
-        });
-        return jsonResult({ taskId, ...status });
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
   // ─── master audio ────────────────────────────────────────────────────────
   server.registerTool(
     "aetherwave_master_audio",
@@ -687,7 +821,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
         preset: z
           .string()
           .describe(
-            "Mastering preset name. Common values: 'general', 'vocal-forward', 'bass-heavy', 'mastered-loud'.",
+            "Mastering preset name. Must be one of: 'streaming', 'loud', 'gentle', 'hip_hop', 'edm', 'pop', 'rock', 'lofi', 'rnb', 'acoustic', 'cinematic', 'podcast'. Call aetherwave_list_master_presets for full metadata (target LUFS, description, tags).",
           ),
         trackTitle: z
           .string()
