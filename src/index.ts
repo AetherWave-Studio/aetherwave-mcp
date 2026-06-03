@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -649,20 +649,22 @@ Default: \`grok-imagine-t2v\` (4-6 cr/s, fast, has KIE -> fal.ai fallback for re
 
 Pick a different model when the prompt has these signals:
 
-- "highest quality" / "premium" / broadcast / commercial    -> \`veo3.1-quality\` or \`veo3-quality\` (Google's flagship, ~80 cr/s, 3-5 min)
+- "highest quality" / "premium" / broadcast / commercial    -> \`veo3.1-quality\` or \`veo3-quality\` (Google's flagship, fixed 350-560 cr for 8s, 3-5 min)
 - "fast premium" / quick high-quality                       -> \`veo3-fast\` or \`veo3.1-fast\` (84 cr fixed for 8s)
-- Native audio inside the video (dialogue, foley, music)    -> \`kling-2.6-master-t2v\` (built-in audio generation)
-- Cinematic camera moves / dolly / pan                      -> \`seedance-pro-t2v\`
+- Cinematic camera moves / dolly / pan                      -> \`seedance-pro-t2v\` (3-10 cr/s) or \`kling-3.0-pro-t2v\` (26 cr/s)
 - Realistic human motion / faces                            -> \`hailuo-2.3-pro-i2v\` (I2V, supply imageUrl)
+- Talking head / lip sync                                   -> \`kling-avatar-pro\` (23 cr/s) or \`infinitalk\` (5-17 cr/s)
 - Anime / stylized / fantasy                                -> \`wan-2.7-t2v\`
-- NSFW / adult                                              -> \`wan-2.2-spicy-i2v\` (I2V only; auto-tags adult)
+- NSFW / adult                                              -> \`wan-22-nsfw-i2v\` (I2V only; auto-tags adult)
 - Animate this exact image                                  -> any I2V variant (\`grok-imagine-i2v\`, \`seedance-pro-i2v\`, \`hailuo-2.3-pro-i2v\`)
 - First + last frame interpolation                          -> \`seedance-pro-i2v\` with both \`imageUrl\` + \`endImageUrl\`
-- Cheapest test                                             -> \`grok-imagine-t2v\` at 480p (4 cr/s, ~24 cr for 6s)
+- Cheapest test                                             -> \`hailuo-2.0-standard\` @ 512p (3 cr/s, ~18 cr for 6s) or \`grok-imagine-t2v\` @ 480p (4 cr/s, ~24 cr for 6s)
 - Clip 12-15s                                               -> \`grok-imagine-t2v\` (accepts up to 15s)
-- Long-form (16-30s)                                        -> \`wan-2.7-t2v\` (extended duration)
+- True 4K                                                   -> \`kling-3.0-4k-t2v\` (94 cr/s, expensive but native 4K)
 
-**Cost framing:** resolution and duration drive cost more than model choice. A 6-second 480p Grok generation costs ~24 cr; the same prompt at 1080p VEO 3.1 Quality is ~480 cr. Pick the lowest acceptable resolution + duration first.
+**Audio in generated video:** \`grok-imagine-t2v\`, \`seedance-pro-t2v\`, and the VEO 3.x family include audio at base cost (no surcharge). Kling 2.6 and Kling 3.0 are the outliers — they price audio as a +50-100% surcharge (Kling 2.6 doubles the cost, Kling 3.0 Pro adds ~46%). Default to Grok / Seedance / VEO when sound matters and you don't want to think about audio pricing.
+
+**Cost framing:** resolution and duration drive cost more than model choice. A 6-second 480p Grok generation costs ~24 cr; the same prompt at 1080p Seedance 2 is ~858 cr (35x more). Pick the lowest acceptable resolution + duration first.
 
 **For I2V models:** \`imageUrl\` is required. For first+last-frame models, pass \`endImageUrl\` too.
 
