@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -161,13 +161,16 @@ async function main() {
 
 Default: \`grok-imagine-t2i\` (5 cr, 6 outputs per call, fast, general purpose).
 
+**Strong recommendation: when a single high-quality output is what's wanted** (most agent / one-shot workflows), prefer \`gpt-image-2-t2i\` (9 cr @ 1K / higher @ 2K, single deterministic image, best general quality across realism, illustration, typography, and composition; supports up to 2K resolution and most aspect ratios including auto). This is the front-runner for serious creative output where you don't need to pick from 6 variations.
+
 Pick a different model when the prompt has these signals:
 
-- "photoreal" / "photo of" / "realistic"     -> \`z-image-turbo\` (3 cr, fastest, single output) or \`imagen-4\` (medium cost, very high quality)
-- "highest quality" / "premium" / no budget  -> \`grok-imagine-quality-t2i\` (16 cr at 1K, 22 cr at 2K) or \`imagen-4-ultra\`
+- "single best result" / "one image" / production / no time to pick from variations -> \`gpt-image-2-t2i\` (9 cr, 1 output, top general quality)
+- "photoreal" / "photo of" / "realistic"     -> \`gpt-image-2-t2i\` (9 cr, best general realism) or \`imagen-4\` (12 cr, very high quality) or \`z-image-turbo\` (3 cr, fastest)
+- "highest quality" / "premium" / no budget  -> \`gpt-image-2-t2i\` at 2K, or \`grok-imagine-quality-t2i\` (16 cr @ 1K, 22 cr @ 2K), or \`imagen-4-ultra\`
 - Text inside the image (signs, posters, typography) -> \`ideogram-v3-t2i\` (best in class) or \`gpt-image-2-t2i\` (also strong)
 - Artistic / painterly / stylized            -> \`midjourney-t2i\`
-- Album art / cover art                      -> \`grok-imagine-t2i\` (default fine); use \`seedream-v4-t2i\` if 4K wanted
+- Album art / cover art                      -> \`gpt-image-2-t2i\` for one strong image; \`grok-imagine-t2i\` for 6 variations to choose from; \`seedream-v4-t2i\` if 4K wanted
 - Logo or design with embedded text          -> \`ideogram-v3-t2i\`
 - NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
 - Cheapest possible / quick test             -> \`z-image-turbo\` (3 cr)
