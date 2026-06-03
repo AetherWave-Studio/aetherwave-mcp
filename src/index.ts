@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.2";
+const VERSION = "0.2.3";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -201,10 +201,25 @@ Ask the user only when:
           .optional()
           .describe("Output resolution. Most models accept '1K' or '2K'; some accept '480p'/'720p'."),
         referenceImages: z
-          .array(z.string().url())
+          .preprocess(
+            (v) => {
+              // Some MCP clients serialize arrays as JSON strings on the wire.
+              // Accept both: real arrays, JSON-encoded arrays, and a single URL
+              // string (which gets wrapped as a one-element array).
+              if (typeof v === "string") {
+                const trimmed = v.trim();
+                if (trimmed.startsWith("[")) {
+                  try { return JSON.parse(trimmed); } catch { /* fall through */ }
+                }
+                return [trimmed];
+              }
+              return v;
+            },
+            z.array(z.string().url()),
+          )
           .optional()
           .describe(
-            "Array of public image URLs for image-to-image generation. Required when using an I2I model.",
+            "Array of public image URLs for image-to-image generation. Required when using an I2I model. A single URL string is also accepted (wrapped as a one-element array).",
           ),
         numImages: z.coerce
           .number()
