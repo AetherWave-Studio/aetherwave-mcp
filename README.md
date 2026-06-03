@@ -2,7 +2,7 @@
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
-One install. One token. Fifteen tools covering:
+One install. One token. Sixteen tools covering:
 
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo
