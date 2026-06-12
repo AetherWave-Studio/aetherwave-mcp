@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.AetherWave-Studio/aetherwave-mcp",
+  "description": "One MCP tool surface for music, image, video, and audio generation across Suno, Grok Imagine, Seedance, Kling, Hailuo, Wan, VEO, Ideogram, and GPT Image 2 - one API key, one credit pool.",
+  "repository": {
+    "url": "https://github.com/AetherWave-Studio/aetherwave-mcp",
+    "source": "github"
+  },
+  "version": "0.2.6",
+  "websiteUrl": "https://aetherwavestudio.com/developers",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@aetherwave-studio/mcp",
+      "version": "0.2.6",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AETHERWAVE_API_KEY",
+          "description": "AetherWave Studio API key (starts with aw_live_). Generate one at https://aetherwavestudio.com/developers - first key grants 50 free credits, no card required.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

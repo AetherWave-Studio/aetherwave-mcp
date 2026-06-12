@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.5";
+const VERSION = "0.2.6";
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
@@ -77,6 +77,7 @@ async function main() {
   server.registerTool(
     "aetherwave_balance",
     {
+      annotations: { readOnlyHint: true, openWorldHint: true },
       title: "Check credit balance",
       description:
         "Returns the current AetherWave credit balance for the API key. Use this BEFORE a generation to confirm sufficient credits, especially for video which can cost 30-300+ credits depending on model/duration/resolution.",
@@ -96,6 +97,7 @@ async function main() {
   server.registerTool(
     "aetherwave_list_image_models",
     {
+      annotations: { readOnlyHint: true, openWorldHint: true },
       title: "List available image models",
       description:
         "Returns every image-generation model AetherWave supports, with its credit cost, default aspect ratio, supported inputs (T2I vs I2I), and any model-specific options. Call this before generate_image when you don't know the right model ID. The model key (e.g. 'grok-imagine-t2i') is what you pass as `model` to generate_image.",
@@ -115,6 +117,7 @@ async function main() {
   server.registerTool(
     "aetherwave_list_master_presets",
     {
+      annotations: { readOnlyHint: true, openWorldHint: true },
       title: "List available audio mastering presets",
       description:
         "Returns every AI mastering preset AetherWave supports, with target LUFS, tags, descriptions, and difficulty level. Call this before master_audio when you don't know which preset fits the track. 12 presets total covering streaming, hip hop, EDM, pop, rock, lo-fi, R&B, acoustic, cinematic, podcast, gentle, and loud-and-punchy mastering styles. Each preset has a target LUFS value (e.g. -14 for streaming, -9 for loud) so you can match the user's distribution target.",
@@ -134,6 +137,7 @@ async function main() {
   server.registerTool(
     "aetherwave_list_video_models",
     {
+      annotations: { readOnlyHint: true, openWorldHint: true },
       title: "List available video models",
       description:
         "Returns every video-generation model AetherWave supports (Grok Imagine, Wan 2.7, Hailuo 02, Seedance Pro/Lite, Kling 2.6 with audio, VEO 3.1, Happy Horse, etc.) with per-second credit cost, supported durations, resolutions, aspect ratios, and whether the model needs an input image (I2V). Call this before generate_video when you don't know the right model ID.",
@@ -153,6 +157,7 @@ async function main() {
   server.registerTool(
     "aetherwave_generate_image",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate image (Grok Imagine, GPT Image 2, Seedream V4, Wan, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo)",
       description:
         `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 6 images per generation, 5 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
@@ -275,6 +280,7 @@ Ask the user only when:
   server.registerTool(
     "aetherwave_edit_image",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Edit image with AI (I2I)",
       description:
         `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (6 cr per call, returns 2 variations, ~30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
@@ -370,6 +376,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_upscale_image",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Upscale image (Topaz)",
       description:
         "Upscales a source image using Topaz's high-fidelity upscaler. Pass a public `imageUrl` and an `upscaleFactor`. Credit cost depends on the source resolution × factor; small images cost less than large ones at the same factor. Returns the upscaled image URL.",
@@ -414,6 +421,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_remove_background",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Remove background from image (Recraft + fal.ai BiRefNet v2 fallback)",
       description:
         "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image. Recraft is the primary provider; on outage the tool auto-falls back to fal.ai BiRefNet v2 so single-image calls never silently fail. Works best on photographic subjects (people, products, animals); transparent-PNG inputs have no foreground to segment.",
@@ -451,6 +459,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_reframe_image",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Reframe image to a new aspect ratio (Ideogram V3 Reframe)",
       description:
         "Reframes an image to a new aspect ratio by intelligently outpainting the edges. Pass a public `imageUrl` and the target `aspectRatio` ('16:9', '9:16', '1:1', '4:3', '3:4', etc.). Three speed tiers: 'turbo' (5 cr, fast), 'balanced' (10 cr, default), 'quality' (14 cr, slowest, best edges). Returns the reframed image URL.",
@@ -510,6 +519,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_upscale_video",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Upscale video (Atlas Video Upscaler)",
       description:
         "Upscales a source video to 1080p or 2K using Atlas. Pass a public `videoUrl` and the target resolution. Cost is per-second (7 cr/s @ 1080p, 9 cr/s @ 2K). Atlas-side limits: clips up to 53s at 1080p, 23s at 2K, source must be <=30fps. Returns the upscaled video URL (R2-hosted).",
@@ -555,6 +565,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_remove_background_video",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Remove background from video",
       description:
         "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. 2 credits per second. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
@@ -605,6 +616,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_reframe_video",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Reframe video to a new aspect ratio (Luma Ray 2 Flash)",
       description:
         "Reframes a video to a new aspect ratio by intelligently outpainting/cropping the edges. Pass a public `videoUrl` and target `reframeAspectRatio`. 17 credits per second. Optional `reframePrompt` lets you steer the new edge content (e.g. 'extend the sky with sunset clouds'). Returns the reframed video URL (R2-hosted).",
@@ -654,6 +666,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
   server.registerTool(
     "aetherwave_generate_video",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate video (Grok Imagine, Wan 2.7, Hailuo 02, Seedance, Kling 2.6, VEO 3.1, Happy Horse)",
       description:
         `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation can take 30s to several minutes; this tool polls with up to an 8-minute budget.
@@ -770,6 +783,7 @@ Ask the user only when:
   server.registerTool(
     "aetherwave_generate_music",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate music (Suno)",
       description:
         "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. Note: the `title` param is advisory for instrumentals - Suno often writes its own title from the prompt content for instrumental generations. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version.",
@@ -830,6 +844,7 @@ Ask the user only when:
   server.registerTool(
     "aetherwave_master_audio",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Master an audio track (AI mastering)",
       description:
         "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Cost: 20 credits per track. Producer, Mogul, and Ultimate plans get mastering free. Output is WAV (~50MB per 3-minute track, lossless for redistribution). Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.",
@@ -874,6 +889,7 @@ Ask the user only when:
   server.registerTool(
     "aetherwave_list_my_creations",
     {
+      annotations: { readOnlyHint: true, openWorldHint: true },
       title: "List my AetherWave gallery items",
       description:
         "Returns items from the authenticated user's gallery — images, videos, audio tracks they've generated on AetherWave. Useful for agent workflows like 'find my last 5 images and reframe them all to 9:16' or 'list my recent songs and master each one'. Supports pagination and type filtering. Each item includes id, type, prompt, model, contentUrl, thumbnailUrl, createdAt, isFavorite, visibility, rating, and type-specific fields (duration for audio/video, width/height for images).",
