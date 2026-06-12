@@ -65,9 +65,13 @@ function errorResult(err: unknown) {
   };
 }
 
-async function main() {
-  const client = bootstrap();
-
+/**
+ * Build a fully-configured AetherWave MCP server bound to a given API client.
+ * Exported so both the stdio entry point (below) and the remote HTTP host
+ * (src/http.ts) can construct a server - the HTTP host builds one per session
+ * with that user's own API key.
+ */
+export function buildServer(client: AetherwaveClient): McpServer {
   const server = new McpServer({
     name: "aetherwave",
     version: VERSION,
@@ -940,13 +944,26 @@ Ask the user only when:
     },
   );
 
+  return server;
+}
+
+// ── stdio entry point (npx-launched local server) ──────────────────────────
+async function mainStdio() {
+  const client = bootstrap();
+  const server = buildServer(client);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // Server now reads from stdin and writes to stdout. Lifetime is the parent
   // process; no explicit shutdown needed.
 }
 
-main().catch((err) => {
-  console.error("Fatal error in @aetherwave/mcp:", err);
-  process.exit(1);
-});
+// Auto-run the stdio server UNLESS the remote HTTP host (src/http.ts) has
+// claimed the process by setting AETHERWAVE_MCP_HTTP before dynamically
+// importing this module. This keeps the published npx bin behaving exactly as
+// before while letting http.ts reuse buildServer() without spawning stdio.
+if (!process.env.AETHERWAVE_MCP_HTTP) {
+  mainStdio().catch((err) => {
+    console.error("Fatal error in @aetherwave/mcp:", err);
+    process.exit(1);
+  });
+}
