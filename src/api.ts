@@ -7,17 +7,32 @@
 const DEFAULT_BASE = "https://aetherwavestudio.com";
 
 export interface ApiClientOptions {
-  apiKey: string;
+  /** aw_live_ API key -> sent as X-AW-Key. */
+  apiKey?: string;
+  /** OAuth access token (awo_) -> forwarded as Authorization: Bearer; the
+   *  AetherWave backend resolves it to the user (MCP Connector / OAuth path). */
+  bearerToken?: string;
   baseUrl?: string;
 }
 
 export class AetherwaveClient {
-  private readonly apiKey: string;
+  private readonly apiKey?: string;
+  private readonly bearerToken?: string;
   private readonly baseUrl: string;
 
   constructor(opts: ApiClientOptions) {
     this.apiKey = opts.apiKey;
+    this.bearerToken = opts.bearerToken;
     this.baseUrl = (opts.baseUrl || DEFAULT_BASE).replace(/\/+$/, "");
+    if (!this.apiKey && !this.bearerToken) {
+      throw new Error("AetherwaveClient requires an apiKey or a bearerToken");
+    }
+  }
+
+  /** Auth header: OAuth bearer (forwarded; backend resolves) or X-AW-Key. */
+  private authHeaders(): Record<string, string> {
+    if (this.bearerToken) return { Authorization: `Bearer ${this.bearerToken}` };
+    return { "X-AW-Key": this.apiKey as string };
   }
 
   /** Authenticated POST. Throws on non-2xx with the error body attached. */
@@ -25,7 +40,7 @@ export class AetherwaveClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
       headers: {
-        "X-AW-Key": this.apiKey,
+        ...this.authHeaders(),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -34,14 +49,10 @@ export class AetherwaveClient {
   }
 
   /**
-   * GET. Sends X-AW-Key when auth = "key", omits header for "public" endpoints.
-   * The platform's public endpoints accept the header without complaint, but
-   * keeping the option here is useful for surfaces that explicitly reject auth
-   * (none today, but future-proofing).
+   * GET. Sends auth header when auth = "key", omits it for "public" endpoints.
    */
   async get<T = any>(path: string, auth: "key" | "public" = "key"): Promise<T> {
-    const headers: Record<string, string> = {};
-    if (auth === "key") headers["X-AW-Key"] = this.apiKey;
+    const headers: Record<string, string> = auth === "key" ? this.authHeaders() : {};
     const res = await fetch(`${this.baseUrl}${path}`, { headers });
     return await this.handle<T>(res, path);
   }
