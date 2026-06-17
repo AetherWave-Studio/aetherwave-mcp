@@ -1,5 +1,9 @@
 # @aetherwave-studio/mcp
 
+[![aetherwave-mcp MCP server](https://glama.ai/mcp/servers/AetherWave-Studio/aetherwave-mcp/badges/card.svg)](https://glama.ai/mcp/servers/AetherWave-Studio/aetherwave-mcp)
+
+[![aetherwave-mcp MCP server](https://glama.ai/mcp/servers/AetherWave-Studio/aetherwave-mcp/badges/score.svg)](https://glama.ai/mcp/servers/AetherWave-Studio/aetherwave-mcp)
+
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
 One install. One token. Sixteen tools covering:
