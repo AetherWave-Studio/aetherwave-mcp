@@ -85,18 +85,45 @@ function challenge(res: Response) {
   });
 }
 
+// Introspection methods answer from the static server info + tool catalog only.
+// They make NO backend call and cost NO credits, so they are safe to serve
+// without a credential. Letting them through anonymously lets directory health
+// probes (Glama, etc.) and clients discover the tool list without a token, while
+// tool EXECUTION (tools/call) stays gated behind the 401 challenge below.
+const INTROSPECTION_METHODS = new Set([
+  "initialize",
+  "notifications/initialized",
+  "notifications/cancelled",
+  "ping",
+  "tools/list",
+]);
+
+function isIntrospectionOnly(body: unknown): boolean {
+  const msgs = Array.isArray(body) ? body : [body];
+  if (msgs.length === 0) return false;
+  return msgs.every(
+    (m: any) => m && typeof m.method === "string" && INTROSPECTION_METHODS.has(m.method),
+  );
+}
+
 app.post("/mcp", async (req: Request, res: Response) => {
   const cred = extractCredential(req);
-  if (!cred) {
+  // Anonymous introspection (initialize / tools/list) is allowed so directory
+  // health probes and clients can discover the catalog without a token. Any
+  // other method (notably tools/call) requires a credential -> 401 challenge.
+  if (!cred && !isIntrospectionOnly(req.body)) {
     challenge(res);
     return;
   }
 
   try {
-    const client =
-      cred.mode === "oauth"
+    const client = cred
+      ? cred.mode === "oauth"
         ? new AetherwaveClient({ bearerToken: cred.token, baseUrl: BASE_URL })
-        : new AetherwaveClient({ apiKey: cred.token, baseUrl: BASE_URL });
+        : new AetherwaveClient({ apiKey: cred.token, baseUrl: BASE_URL })
+      : // Discovery-only placeholder: introspection never calls the backend, so
+        // this token is never sent. tools/call cannot reach here (gated above).
+        new AetherwaveClient({ apiKey: "anonymous-introspection", baseUrl: BASE_URL });
     const server = buildServer(client);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless
