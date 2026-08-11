@@ -830,6 +830,43 @@ Ask the user only when:
           .enum(["m", "f"])
           .optional()
           .describe("Vocal gender, 'm' or 'f'. Only applies when lyrics are supplied. Default 'm'."),
+        /* THESE DESCRIPTIONS ARE THE USER INTERFACE.
+         * Nobody writing to this tool sees JSON. They say "make it weirder" or
+         * "stick closer to that style", and the model picks a parameter based on
+         * nothing but the sentence below. So each one is phrased in the language
+         * a person actually uses, not in the vendor's terms.
+         * All four apply only when lyrics are supplied (custom mode); the API
+         * ignores them otherwise. */
+        styleWeight: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe(
+            "0 to 1. How closely to follow the style description. Higher sticks to it, lower lets the model roam. Use when someone asks to stay closer to, or further from, a described sound. Only applies with lyrics.",
+          ),
+        weirdnessConstraint: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe(
+            "0 to 1. How experimental the result is. Higher is stranger and more unexpected, lower is safer and more conventional. Use when someone asks to make it weirder or more normal. Only applies with lyrics.",
+          ),
+        audioWeight: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe(
+            "0 to 1. Weighting on the audio character of the generation. Only applies with lyrics.",
+          ),
+        negativeTags: z
+          .string()
+          .optional()
+          .describe(
+            "Comma-separated things to AVOID, e.g. 'heavy metal, screaming, distorted guitar'. Use when someone says they do not want a particular sound. Only applies with lyrics.",
+          ),
       },
     },
     async (args) => {
@@ -863,6 +900,14 @@ Ask the user only when:
               vocalGender: args.vocalGender ?? "m",
               instrumental: args.instrumental ?? false,
               model: args.model || "V5_5",
+              /* Sent only when given. `!= null` rather than truthiness because 0
+                 is a MEANINGFUL value on all three weights - `args.styleWeight &&`
+                 would silently discard a deliberate zero, which is the same
+                 silent-drop this whole tool was fixed for. */
+              ...(args.styleWeight != null ? { styleWeight: args.styleWeight } : {}),
+              ...(args.weirdnessConstraint != null ? { weirdnessConstraint: args.weirdnessConstraint } : {}),
+              ...(args.audioWeight != null ? { audioWeight: args.audioWeight } : {}),
+              ...(args.negativeTags ? { negativeTags: args.negativeTags } : {}),
             }
           : {
               customMode: false,
