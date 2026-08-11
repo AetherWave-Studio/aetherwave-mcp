@@ -22,6 +22,7 @@
 // dormant. The dynamic import below runs after this assignment.
 process.env.AETHERWAVE_MCP_HTTP = "1";
 
+import { createRequire } from "node:module";
 import express, { type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { AetherwaveClient } from "./api.js";
@@ -56,8 +57,23 @@ function extractCredential(req: Request): Credential | null {
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
+/* Health reports the VERSION, not just liveness. Without it, "which build is
+ * live?" takes an MCP handshake plus inferring the answer from whether some
+ * parameter exists in a tool schema - which is exactly how it had to be checked
+ * on 2026-08-11 after shipping the generate_music fix. A deploy you cannot
+ * verify in one request is a deploy you will assume worked. */
+const PKG_VERSION: string = (() => {
+  try {
+    // ESM: no `require`, and dist/http.js sits one level below the package root.
+    const req = createRequire(import.meta.url);
+    return req("../package.json").version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
+
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ ok: true, service: "aetherwave-mcp-http" });
+  res.json({ ok: true, service: "aetherwave-mcp-http", version: PKG_VERSION });
 });
 
 // Protected Resource Metadata (RFC 9728). Points Claude at the authorization
