@@ -815,19 +815,54 @@ Ask the user only when:
           .describe(
             "Custom lyrics. If omitted, Suno will generate lyrics from the prompt (unless instrumental=true).",
           ),
+        vocalGender: z
+          .enum(["m", "f"])
+          .optional()
+          .describe("Vocal gender, 'm' or 'f'. Only applies when lyrics are supplied. Default 'm'."),
       },
     },
     async (args) => {
       try {
+        /* THE API OVERLOADS `prompt`, AND THIS TOOL HAS TO TRANSLATE.
+         *
+         * /api/generate-music destructures exactly:
+         *   prompt, model, instrumental, vocalGender, customMode, title, style
+         *
+         * There is NO `lyrics` field, and `title` is read ONLY when customMode
+         * is true. This tool used to send { prompt, instrumental, model, title,
+         * lyrics }, so lyrics AND title were silently discarded and every
+         * generation ran in simple mode. Reported 2026-08-11 by a developer who
+         * could not reproduce a Music Studio request from the package.
+         *
+         * What `prompt` MEANS depends on the mode:
+         *   customMode false -> prompt is a DESCRIPTION of the song
+         *   customMode true  -> prompt is the LITERAL LYRICS, and `style`
+         *                       carries the musical direction
+         *
+         * The tool's own arguments stay intuitive (description in `prompt`,
+         * words in `lyrics`) and this adapter maps them onto that contract.
+         * Do not "simplify" it back to passing args straight through. */
+        const hasLyrics = !!(args.lyrics && args.lyrics.trim());
+        const submitBody = hasLyrics
+          ? {
+              customMode: true,
+              prompt: args.lyrics!.trim(),   // custom mode: prompt IS the lyrics
+              style: args.prompt,            // ...so the description becomes style
+              title: args.title,             // only honoured in custom mode
+              vocalGender: args.vocalGender ?? "m",
+              instrumental: args.instrumental ?? false,
+              model: args.model || "V5_5",
+            }
+          : {
+              customMode: false,
+              prompt: args.prompt,           // simple mode: prompt is the description
+              instrumental: args.instrumental ?? false,
+              model: args.model || "V5_5",
+            };
+
         const { status, taskId } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-music",
-          submitBody: {
-            prompt: args.prompt,
-            instrumental: args.instrumental ?? false,
-            model: args.model || "V5_5",
-            title: args.title,
-            lyrics: args.lyrics,
-          },
+          submitBody,
           statusPath: (id) => `/api/music-status/${id}`,
           timeoutMs: 6 * 60_000,
           pollIntervalMs: 4_000,
