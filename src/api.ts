@@ -4,7 +4,30 @@
  * generation endpoint (image / video / music / band).
  */
 
+import { createRequire } from "node:module";
+
 const DEFAULT_BASE = "https://aetherwavestudio.com";
+
+/* EVERY REQUEST DECLARES ITS CLIENT VERSION.
+ *
+ * Without this the platform has no idea who is running old code, and npm gives
+ * you no way to tell them: a deprecation warning prints to stderr on install,
+ * and an MCP server's stderr goes to a log file nobody opens. So the users most
+ * likely to be stuck on an old build are exactly the ones who never see the
+ * notice.
+ *
+ * This header is the enabling half of the fix. Once the server can see the
+ * version, it can return an upgrade notice inside a normal tool response - and
+ * tool responses are read aloud by the assistant, which is the ONE channel that
+ * reaches an npx user in the place they are actually looking. */
+const CLIENT_VERSION: string = (() => {
+  try {
+    return createRequire(import.meta.url)("../package.json").version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+const CLIENT_UA = `@aetherwave-studio/mcp/${CLIENT_VERSION}`;
 
 export interface ApiClientOptions {
   /** aw_live_ API key -> sent as X-AW-Key. */
@@ -29,10 +52,16 @@ export class AetherwaveClient {
     }
   }
 
-  /** Auth header: OAuth bearer (forwarded; backend resolves) or X-AW-Key. */
+  /** Auth header: OAuth bearer (forwarded; backend resolves) or X-AW-Key.
+   *  Always carries the client version so the platform can spot stale installs. */
   private authHeaders(): Record<string, string> {
-    if (this.bearerToken) return { Authorization: `Bearer ${this.bearerToken}` };
-    return { "X-AW-Key": this.apiKey as string };
+    const ident = {
+      "X-AW-Client": CLIENT_UA,
+      "User-Agent": CLIENT_UA,
+    };
+    if (this.bearerToken)
+      return { ...ident, Authorization: `Bearer ${this.bearerToken}` };
+    return { ...ident, "X-AW-Key": this.apiKey as string };
   }
 
   /** Authenticated POST. Throws on non-2xx with the error body attached. */

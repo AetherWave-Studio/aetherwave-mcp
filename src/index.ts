@@ -14,10 +14,21 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createRequire } from "node:module";
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 
-const VERSION = "0.2.6";
+/* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
+ * while the package shipped 0.2.9, so every client was told the wrong version at
+ * initialize - and a version you edit by hand is a version that silently drifts
+ * the moment anyone forgets. `npm version` now moves it for free. */
+const VERSION: string = (() => {
+  try {
+    return createRequire(import.meta.url)("../package.json").version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 function bootstrap(): AetherwaveClient {
   const apiKey = process.env.AETHERWAVE_API_KEY;
