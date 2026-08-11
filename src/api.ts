@@ -65,9 +65,24 @@ export class AetherwaveClient {
       } catch {
         body = await res.text().catch(() => "");
       }
+      /* `details` MUST be surfaced. The platform puts a generic label in
+       * `error` and the ACTIONABLE reason in `details`, e.g.
+       *   { error: "Generation failed",
+       *     details: "The length of music style cannot exceed 1000 characters" }
+       *
+       * Reading only `error` produced "500 - Generation failed" and nothing
+       * more, so on 2026-08-11 a developer could not distinguish a length limit
+       * from an outage. He diagnosed it only by opening the browser console on
+       * the web app, which an MCP client has no equivalent of. Upstream limit
+       * errors are the most common failure on this path and they are ALWAYS
+       * in `details`. */
+      const detail =
+        typeof body === "object" && body && body.details
+          ? ` (${body.details})`
+          : "";
       const message =
         typeof body === "object" && body && (body.error || body.message)
-          ? `${body.error || body.message}`
+          ? `${body.error || body.message}${detail}`
           : typeof body === "string"
             ? body
             : `HTTP ${res.status}`;
