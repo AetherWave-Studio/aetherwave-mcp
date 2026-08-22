@@ -427,11 +427,11 @@ Comic script/draw/assemble progress is per project, not per task: use aetherwave
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate image (Grok Imagine, GPT Image 2, Seedream V4, Wan, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo)",
       description:
-        `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 6 images per generation, 5 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
+        `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 2 images per generation, 6 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
 
 ## Model selection guide (when the user does not specify a model)
 
-Default: \`grok-imagine-t2i\` (5 cr, 6 outputs per call, fast, general purpose).
+Default: \`grok-imagine-t2i\` (6 cr, 2 outputs per call, fast, general purpose).
 
 **Strong recommendation: when a single high-quality output is what's wanted** (most agent / one-shot workflows), prefer \`gpt-image-2-t2i\` (9 cr @ 1K / higher @ 2K, single deterministic image, best general quality across realism, illustration, typography, and composition; supports up to 2K resolution and most aspect ratios including auto). This is the front-runner for serious creative output where you don't need to pick from 6 variations.
 
@@ -442,11 +442,11 @@ Pick a different model when the prompt has these signals:
 - "highest quality" / "premium" / no budget  -> \`gpt-image-2-t2i\` at 2K, or \`grok-imagine-quality-t2i\` (16 cr @ 1K, 22 cr @ 2K), or \`imagen-4-ultra\`
 - Text inside the image (signs, posters, typography) -> \`ideogram-v3-t2i\` (best in class) or \`gpt-image-2-t2i\` (also strong)
 - Artistic / painterly / stylized            -> \`midjourney-t2i\`
-- Album art / cover art                      -> \`gpt-image-2-t2i\` for one strong image; \`grok-imagine-t2i\` for 6 variations to choose from; \`seedream-v4-t2i\` if 4K wanted
+- Album art / cover art                      -> \`gpt-image-2-t2i\` for one strong image; \`grok-imagine-t2i\` for 2 variations to choose from; \`seedream-v4-t2i\` if 4K wanted
 - Logo or design with embedded text          -> \`ideogram-v3-t2i\`
 - NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
 - Cheapest possible / quick test             -> \`z-image-turbo\` (2 cr)
-- Multiple variations to compare             -> keep \`grok-imagine-t2i\` (6 outputs default) or use \`numImages\` on a multi-output model
+- Multiple variations to compare             -> keep \`grok-imagine-t2i\` (2 outputs per call) or use \`numImages\` on a multi-output model
 
 For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer (\`midjourney-i2i\`), premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
 
@@ -555,11 +555,11 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Edit image with AI (I2I)",
       description:
-        `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (6 cr, one image, ~15-30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
+        `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (10 cr, one image, ~15-30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
 
 ## Model selection guide for edits
 
-Default: \`grok-imagine-i2i\` (6 cr, one image, fast ~15-30s, strong general-purpose edit quality).
+Default: \`grok-imagine-i2i\` (10 cr, one image, fast ~15-30s, strong general-purpose edit quality).
 
 Pick a different model when:
 
@@ -580,7 +580,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .string()
           .optional()
           .describe(
-            "Model ID. Defaults to 'grok-imagine-i2i' (6 cr, one image). Other options: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i', 'grok-imagine-quality-i2i'. Use list_image_models for the full list.",
+            "Model ID. Defaults to 'grok-imagine-i2i' (10 cr, one image). Other options: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i', 'grok-imagine-quality-i2i'. Use list_image_models for the full list.",
           ),
         aspectRatio: z
           .string()
@@ -807,23 +807,34 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     },
   );
 
-  // ─── upscale video (Atlas) ───────────────────────────────────────────────
+  // ─── upscale video (Atlas / BytePlus) ────────────────────────────────────
   server.registerTool(
     "aetherwave_upscale_video",
     {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-      title: "Upscale video (Atlas Video Upscaler)",
+      title: "Upscale video (Atlas / BytePlus)",
       description:
-        "Upscales a source video to 1080p or 2K using Atlas. Pass a public `videoUrl` and the target resolution. Cost is per-second (7 cr/s @ 1080p, 9 cr/s @ 2K). Atlas-side limits: clips up to 53s at 1080p, 23s at 2K, source must be <=30fps. Returns the upscaled video URL (R2-hosted)." + RETURNS_NOTE,
+        "Upscales a source video. Pass a public `videoUrl` and a target tier. Two engines: Atlas reaches 1080p and 2k only (7 and 10 cr/s; clips up to 53s at 1080p and 23s at 2k, source <=30fps); BytePlus also reaches 4k and 8k (4/8/16/62 cr/s at 1080p/2k/4k/8k) and is selected automatically for 4k and 8k. " +
+        "IMPORTANT, A TIER IS NOT A DIMENSION. These names are 16:9 standards, so '4k' means the 3840x2160 BOX and the source is fitted inside it, which means the SMALLER dimension wins. A square source at '4k' returns 2160x2160, NOT 3840x3840. Measured. A 3:4 source at Atlas '2k' returned 1664x2216. " +
+        "So never assume a tier lands on an exact pixel target: pick the highest sensible tier, then resize to exact dimensions in ffmpeg. Do NOT escalate to 8k to compensate, it is 62 cr/s to buy reconstruction a free lanczos resize gets you. " +
+        "For reference, Apple Music Album Motion Artwork requires exactly 3840x3840 and 2048x2732, and no tier produces either directly. Returns the upscaled video URL (R2-hosted)." + RETURNS_NOTE,
       inputSchema: {
         videoUrl: z
           .string()
           .url()
           .describe("Public URL of the source video (MP4)."),
         targetResolution: z
-          .enum(["1080p", "2k"])
+          .enum(["1080p", "2k", "4k", "8k"])
           .optional()
-          .describe("Target output resolution. Defaults to '1080p'. '2k' is more expensive and limited to ~23s clips."),
+          .describe(
+            "Target TIER, not exact dimensions. Defaults to '1080p'. The source is fitted inside a 16:9 box, so the smaller dimension wins: a square at '4k' yields 2160x2160. '4k' and '8k' need BytePlus and route there automatically.",
+          ),
+        upscaleProvider: z
+          .enum(["atlas", "byteplus"])
+          .optional()
+          .describe(
+            "Which engine. Defaults to Atlas at 1080p/2k. BytePlus is cheaper at both shared tiers and is forced for 4k/8k, which Atlas cannot produce.",
+          ),
         ...waitArgs,
       },
     },
@@ -835,6 +846,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
             tool: "upscale",
             videoUrl: args.videoUrl,
             targetResolution: args.targetResolution || "1080p",
+            ...(args.upscaleProvider ? { upscaleProvider: args.upscaleProvider } : {}),
           },
           statusPath: (id) => `/api/video/edit/status/${id}`,
           timeoutMs: 10 * 60_000,

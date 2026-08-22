@@ -105,14 +105,14 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_list_image_models` | Enumerate every image model with cost, speed, I2I support |
 | `aetherwave_list_video_models` | Enumerate every video model with cost-per-second, durations, resolutions |
 | `aetherwave_list_master_presets` | Enumerate the 12 mastering presets with target LUFS, tags, descriptions |
-| `aetherwave_generate_image` | T2I or I2I across 8+ models. Default `grok-imagine-t2i` (5 cr, 6 outputs) |
+| `aetherwave_generate_image` | T2I or I2I across 8+ models. Default `grok-imagine-t2i` (6 cr, 2 outputs) |
 | `aetherwave_generate_video` | T2V or I2V across 7+ model families. Native audio, reference-image identity lock, async submit |
 | `aetherwave_generate_music` | Suno V5.5 by default. Two tracks per submission, lyrics + instrumental |
-| `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (3 cr/image effective, 2 variations) |
+| `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (10 cr, one image) |
 | `aetherwave_upscale_image` | Topaz upscale 1x / 2x / 4x / 8x |
 | `aetherwave_reframe_image` | Ideogram V3 Reframe to a new aspect ratio (outpaints edges) |
 | `aetherwave_remove_background` | Recraft primary + fal BiRefNet v2 fallback (auto failover). Output auto-saved to gallery |
-| `aetherwave_upscale_video` | Atlas Video Upscaler, 1080p or 2K |
+| `aetherwave_upscale_video` | Atlas (1080p, 2K) or BytePlus (1080p to 8K) video upscale |
 | `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output. 2 cr/sec |
 | `aetherwave_reframe_video` | Luma Ray 2 Flash reframe to new aspect ratio |
 | `aetherwave_master_audio` | AI mastering across 12 genre/style presets. 20 cr/track, free on Producer / Mogul / Ultimate plans |
@@ -418,7 +418,7 @@ I2I editing guided by a text prompt.
 |-------|------|----------|---------|-------|
 | `prompt` | string | yes | - | Text description of the edit |
 | `imageUrl` | string | yes | - | Public URL of source image |
-| `model` | string | no | `grok-imagine-i2i` | 3 cr/image effective, 2 outputs |
+| `model` | string | no | `grok-imagine-i2i` | 10 cr, one image |
 | `aspectRatio` | string | no | source ratio | e.g. `1:1`, `16:9` |
 | `resolution` | string | no | model default | Some models: `1K`, `2K`, `4K` |
 | `quality` | enum | no | model default | `low`, `medium`, `high` (GPT Image) |
@@ -469,12 +469,15 @@ Recraft primary + fal.ai BiRefNet v2 fallback. ~5 cr per image.
 
 ### `aetherwave_upscale_video`
 
-Atlas Video Upscaler. Targets 1080p or 2K.
+Two engines. Atlas reaches 1080p and 2K; BytePlus reaches 1080p, 2K, 4K and 8K and is selected automatically for 4K and 8K.
+
+A tier is not a dimension: the names are 16:9 standards, so the source is fitted inside the tier's box and the smaller dimension wins. A square source at `4k` returns 2160x2160, not 3840x3840. For an exact pixel target, take the highest sensible tier and resize in ffmpeg.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
 | `videoUrl` | string | yes | - | Public URL of source video (MP4) |
-| `targetResolution` | enum | no | `1080p` | `1080p` (7 cr/s, ≤53s) or `2k` (9 cr/s, ≤23s). Source must be ≤30fps |
+| `targetResolution` | enum | no | `1080p` | `1080p`, `2k`, `4k`, `8k`. Atlas: 7 cr/s at 1080p (up to 53s), 10 cr/s at 2k (up to 23s), source 30fps or less. BytePlus: 4 / 8 / 16 / 62 cr/s |
+| `upscaleProvider` | enum | no | `atlas` at 1080p/2k | `atlas` or `byteplus`. 4k and 8k always run on BytePlus |
 
 **Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
 
