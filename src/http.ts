@@ -2,7 +2,7 @@
  * Remote Streamable-HTTP host for the AetherWave MCP server (the OAuth
  * "resource server" Claude connects to).
  *
- * Serves the SAME 16 tools as the stdio server (via buildServer) over Streamable
+ * Serves the SAME tools as the stdio server (via buildServer) over Streamable
  * HTTP. Two credential modes per request:
  *   - OAuth access token  (Authorization: Bearer awo_...) -> forwarded to the
  *     AetherWave backend, which resolves it to the user (Connectors Directory).

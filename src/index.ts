@@ -17,6 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createRequire } from "node:module";
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
+import { registerComicTools } from "./comic.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
  * while the package shipped 0.2.9, so every client was told the wrong version at
@@ -1034,6 +1035,9 @@ Ask the user only when:
       }
     },
   );
+
+  // ─── comic books (Graphic Novel Engine) ─────────────────────────────────
+  registerComicTools(server, client);
 
   return server;
 }
