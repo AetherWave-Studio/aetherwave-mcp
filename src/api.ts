@@ -172,6 +172,11 @@ export class AetherwaveClient {
     const successSet = new Set(successStates.map((s) => s.toLowerCase()));
     const failureSet = new Set(failureStates.map((s) => s.toLowerCase()));
 
+    /* Tolerate a run of gateway blips before giving up on an already-paid job.
+     * At the 3s default poll interval this is ~2 minutes of upstream trouble. */
+    const MAX_CONSECUTIVE_TRANSIENT = 40;
+    let consecutiveTransient = 0;
+
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, pollIntervalMs));
       let status: any;
@@ -184,8 +189,30 @@ export class AetherwaveClient {
         if (err?.status === 404 && Date.now() < deadline - timeoutMs / 2) {
           continue;
         }
+        /* A GATEWAY BLIP MUST NOT DESTROY A PAID GENERATION.
+         *
+         * The job is already submitted and already billed; it is running
+         * server-side and its result will land in the gallery whatever happens
+         * to this poll. Throwing on a single 502 abandons a clip the caller has
+         * paid for and hands back an error that reads like the generation
+         * failed, which it did not. Observed 2026-09-25: a 502 on one status
+         * poll killed an otherwise healthy seedance-2-mini render.
+         *
+         * Transient upstream statuses are therefore retried for as long as the
+         * budget allows. A persistent outage still ends at the deadline, whose
+         * message points at the gallery. */
+        const transient = err?.status === 408 || err?.status === 429 || (err?.status >= 500 && err?.status <= 599);
+        if (transient) {
+          consecutiveTransient += 1;
+          if (consecutiveTransient <= MAX_CONSECUTIVE_TRANSIENT) continue;
+          throw new Error(
+            `AetherWave status polling failed ${consecutiveTransient} times in a row (last: ${err?.status}) for taskId=${taskId}. ` +
+              `The generation may still complete server-side; check the AetherWave gallery.`,
+          );
+        }
         throw err;
       }
+      consecutiveTransient = 0;
       const state = String(status?.state || status?.status || "").toLowerCase();
       if (successSet.has(state)) return { taskId, status };
       if (failureSet.has(state)) {

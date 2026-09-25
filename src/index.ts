@@ -76,6 +76,46 @@ function errorResult(err: unknown) {
   };
 }
 
+/** Cap on a single fetched reference image. Nine of these go in one request
+ *  body as base64, which inflates by ~33%, so keep each one sane. */
+const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Fetch an image URL and return it as a base64 data URL.
+ *
+ * `additionalImages` on /api/generate-video accepts data URLs only. Every image
+ * the platform stores is served over https, so an agent handed a character's
+ * referenceImages cannot pass them straight through - it gets
+ * `Invalid or empty base64 image data`, which names the wrong problem. Doing the
+ * conversion here means the caller passes the URLs it was given.
+ *
+ * A data URL passed in is returned untouched, so callers that already encoded
+ * are unaffected.
+ */
+async function toDataUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(`referenceImages must be http(s) or data URLs (got: ${url.slice(0, 40)})`);
+  }
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Could not fetch reference image (${res.status}): ${url}`);
+  }
+  const type = res.headers.get("content-type") || "image/png";
+  if (!type.startsWith("image/")) {
+    throw new Error(`Reference URL is not an image (content-type: ${type}): ${url}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > MAX_REFERENCE_BYTES) {
+    throw new Error(
+      `Reference image is ${(buf.byteLength / 1e6).toFixed(1)}MB, over the ${
+        MAX_REFERENCE_BYTES / 1e6
+      }MB limit: ${url}`,
+    );
+  }
+  return `data:${type};base64,${buf.toString("base64")}`;
+}
+
 /**
  * Build a fully-configured AetherWave MCP server bound to a given API client.
  * Exported so both the stdio entry point (below) and the remote HTTP host
@@ -87,6 +127,148 @@ export function buildServer(client: AetherwaveClient): McpServer {
     name: "aetherwave",
     version: VERSION,
   });
+
+  // ─── list UGC characters (identity anchors for consistent-character work) ─
+  server.registerTool(
+    "aetherwave_list_characters",
+    {
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      title: "List my UGC characters (recurring on-screen people)",
+      description:
+        `Returns the caller's saved UGC characters - the recurring, named people they shoot with - with everything needed to keep one consistent across a whole production.
+
+CALL THIS FIRST whenever the request names a person the user already has ("use my Amy character", "shoot this with Katie"). There is no other way to discover that a character exists, and guessing their appearance produces a different face in every clip.
+
+Per character you get:
+- \`identityBlock\` - the locked CORE IDENTITY string. Append it VERBATIM to every prompt in the production. Identical text is identical conditioning; that is the whole consistency mechanism, and paraphrasing it breaks it.
+- \`referenceImages\` - the approved image pack. Pass these as \`referenceImages\` on aetherwave_generate_video. ⚠️ When a pack exists it REPLACES the hero image, it does not ride alongside it (measured A/B, 2026-09-22): mixing them pulls the face two ways.
+- \`heroImageUrl\` - single fallback anchor, for characters with no pack.
+- \`voiceId\` / \`voiceSpec\` - the engineered voice description. Append it to the prompt for any talking clip, byte-identical every time, for the same reason as identityBlock.
+- \`personality\` - tones, quirks and speechStyle. This is the comic/tonal direction the user wrote for this character; fold it into the prompt rather than inventing a manner.
+- \`negativeLock\` - the character's negative prompt.
+- \`hasApprovedPack\` - true when referenceImages is non-empty; tells you to prefer the pack over the hero.`,
+      inputSchema: {
+        name: z
+          .string()
+          .optional()
+          .describe(
+            "Optional case-insensitive substring filter on character name or handle (e.g. 'amy'). Omit to list every character.",
+          ),
+      },
+    },
+    async (args) => {
+      try {
+        const data = await client.get<any>("/api/ugc/teams");
+        const voices = await client
+          .get<any>("/api/ugc/voices", "public")
+          .catch(() => null);
+        const voiceById = new Map<string, any>();
+        for (const v of voices?.voices ?? voices ?? []) {
+          if (v?.key) voiceById.set(String(v.key), v);
+        }
+
+        const q = args.name?.trim().toLowerCase();
+        const characters = (data?.teams ?? [])
+          .flatMap((team: any) =>
+            (team?.characters ?? []).map((c: any) => ({ team, c })),
+          )
+          .filter(({ c }: any) =>
+            !q ||
+            String(c?.name ?? "").toLowerCase().includes(q) ||
+            String(c?.handle ?? "").toLowerCase().includes(q),
+          )
+          .map(({ team, c }: any) => {
+            const refs: string[] = Array.isArray(c?.referenceImages)
+              ? c.referenceImages
+              : [];
+            const voice = c?.voiceId ? voiceById.get(String(c.voiceId)) : null;
+            return {
+              id: c?.id,
+              name: c?.name,
+              handle: c?.handle,
+              teamName: team?.name,
+              status: c?.status,
+              identityBlock: c?.identityBlock ?? null,
+              negativeLock: c?.negativeLock ?? null,
+              referenceImages: refs,
+              hasApprovedPack: refs.length > 0,
+              heroImageUrl: c?.heroImageUrl ?? null,
+              voiceId: c?.voiceId ?? null,
+              /* The engineered spec lives client-side today, so this is null
+               * until /api/ugc/voices serves it. The descriptor is still worth
+               * returning - it is better than inventing a voice from scratch. */
+              voiceSpec: voice?.spec ?? null,
+              voiceDescriptor: voice
+                ? [voice.name, voice.gender, voice.accent, voice.style]
+                    .filter(Boolean)
+                    .join(", ")
+                : null,
+              personality: c?.personality ?? null,
+              engineParams: c?.engineParams ?? null,
+            };
+          });
+
+        return jsonResult({
+          count: characters.length,
+          characters,
+          usage:
+            "Append identityBlock verbatim to every prompt, pass referenceImages to generate_video (NOT imageUrl), and keep the voice text byte-identical across clips.",
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ─── poll a job submitted asynchronously ─────────────────────────────────
+  server.registerTool(
+    "aetherwave_get_job",
+    {
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      title: "Check a generation job by taskId",
+      description:
+        "Returns the current state and, once finished, the output URL(s) for a job submitted with async:true. Poll this every 10-20s. Use it whenever a generation call timed out too: the job keeps running server-side and is saved to the gallery regardless of what happened to the client, so a taskId is enough to recover a render you already paid for.",
+      inputSchema: {
+        taskId: z.string().describe("The taskId returned by an async submit."),
+        kind: z
+          .enum(["video", "image", "music", "video-edit"])
+          .describe("Which pipeline produced the job. Picks the status endpoint."),
+      },
+    },
+    async (args) => {
+      try {
+        const path =
+          args.kind === "video"
+            ? `/api/generate-video/status/${encodeURIComponent(args.taskId)}`
+            : args.kind === "image"
+              ? `/api/generate-image/status/${encodeURIComponent(args.taskId)}`
+              : args.kind === "music"
+                ? `/api/music-status/${encodeURIComponent(args.taskId)}`
+                : `/api/video/edit/status/${encodeURIComponent(args.taskId)}`;
+        const status = await client.get<any>(path);
+        const state = String(status?.state || status?.status || "unknown");
+        const videoUrl =
+          status?.data?.video?.url || status?.video?.url || status?.data?.video_url || null;
+        const imageUrls =
+          status?.data?.images?.map?.((i: any) => i?.url ?? i) ??
+          status?.images?.map?.((i: any) => i?.url ?? i) ??
+          null;
+        return jsonResult({
+          taskId: args.taskId,
+          state,
+          done: ["success", "complete", "completed", "succeeded", "done"].includes(
+            state.toLowerCase(),
+          ),
+          videoUrl,
+          imageUrls,
+          error: status?.error ?? null,
+          raw: status,
+        });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
 
   // ─── balance ─────────────────────────────────────────────────────────────
   server.registerTool(
@@ -711,6 +893,18 @@ Pick a different model when the prompt has these signals:
 
 **For I2V models:** \`imageUrl\` is required. For first+last-frame models, pass \`endImageUrl\` too.
 
+## Consistent characters
+
+If the user names a person they already have ("my Amy character"), call \`aetherwave_list_characters\` FIRST, append that character's \`identityBlock\` verbatim to the prompt, and pass their \`referenceImages\`. Do NOT use \`imageUrl\` for this - a starting frame switches the engine to first-frame mode and drops the reference images, which is the opposite of what a consistent character needs.
+
+## Writing dialogue
+
+\`duration\` is authoritative: the engine honours the seconds you ask for to within ~0.1s and then **fits the line to that length by changing pace**, rather than finishing early. So write the line to the clip length - do NOT estimate the clip length from the line. Measured on a 22-clip production: ~2 words per second of clip. A words-per-minute figure from a voice description describes the character, not the engine, and budgeting by it overran by 35%.
+
+Pass \`generateAudio: true\` for any clip with dialogue, and spell hard words the way they should be *spoken* ("super intelligence" rather than "superintelligence") - the engine reads the text literally and mangles unfamiliar compounds.
+
+⚠️ A take can come back saying the WRONG WORDS and still report success. Re-rendering the identical prompt produced one clean take and one that dropped a whole sentence. For anything that will be assembled unattended, verify the rendered speech against the script before using the clip.
+
 Ask the user only when:
 - Single generation would cost more than 100 credits and they haven't confirmed
 - They asked for "the best" with no other signal; surface 2-3 options with cost ranges`,
@@ -753,10 +947,84 @@ Ask the user only when:
           .enum(["fun", "normal", "spicy"])
           .optional()
           .describe("Moderation mode for Grok Imagine. Defaults to 'normal'."),
+        generateAudio: z
+          .boolean()
+          .optional()
+          .describe(
+            "Render native speech and sound WITH the video. Off by default, so a clip is SILENT unless you pass true. Free on Seedance 2.x at every resolution (measured: the sounded and silent runs bill identically) and included at base cost on Grok Imagine and VEO 3.x; Kling 2.6/3.0 surcharge for it. Pass true whenever the prompt contains dialogue - a talking head with no audio is not what the caller asked for.",
+          ),
+        async: z
+          .boolean()
+          .optional()
+          .describe(
+            "Submit and return a taskId IMMEDIATELY instead of waiting for the render. Video takes 1-8 minutes and most MCP clients abandon a call at 60s, so a synchronous video call usually fails from the client side even though the render succeeds. Pass true, then poll aetherwave_get_job(taskId). Strongly recommended for video.",
+          ),
+        referenceImages: z
+          .array(z.string().url())
+          .max(9)
+          .optional()
+          .describe(
+            "Up to 9 image URLs used as identity anchors held consistent ACROSS the whole clip. THIS is the parameter for a consistent character - pass the character's referenceImages from aetherwave_list_characters. Mutually exclusive with imageUrl: a supplied first frame switches the engine to first-frame mode and DROPS these, disabling the only no-drift mechanism there is. Platform https URLs are fetched and encoded for you.",
+          ),
       },
     },
     async (args) => {
       try {
+        /* imageUrl and referenceImages are not additive. A user-supplied first
+         * frame puts the engine in first-frame mode EXCLUSIVELY and the
+         * reference images are dropped. Silently honouring one and discarding
+         * the other is how a "keep this character consistent" request quietly
+         * returns a drifting face, so refuse the ambiguous call. */
+        if (args.imageUrl && args.referenceImages?.length) {
+          return errorResult(
+            new Error(
+              "imageUrl and referenceImages cannot be combined: a starting frame switches the engine to first-frame mode and drops reference images. " +
+                "For a consistent character pass referenceImages only; to animate one exact image pass imageUrl only.",
+            ),
+          );
+        }
+
+        /* The API accepts base64 data URLs here, not https - and every asset the
+         * platform stores IS an https URL. Without this the caller must download
+         * and re-encode every reference for every call, and the error it gets
+         * otherwise is `Invalid or empty base64 image data`, which reads like a
+         * corrupt payload rather than an unsupported scheme. */
+        const additionalImages = args.referenceImages?.length
+          ? await Promise.all(args.referenceImages.map((u) => toDataUrl(u)))
+          : undefined;
+
+        /* A synchronous video call cannot survive a default MCP client: the
+         * render takes 1-8 minutes and the client gives up at 60s
+         * (observed: MCP error -32001, data.timeout 60000). The job itself is
+         * fine - it is already submitted, billed and saved server-side - but
+         * the caller sees a timeout and has no taskId to recover with. Async
+         * hands the id back before any of that can happen. */
+        if (args.async) {
+          const submitted = await client.post<any>("/api/generate-video", {
+            prompt: args.prompt,
+            model: args.model || "grok-imagine-t2v",
+            duration: args.duration,
+            resolution: args.resolution,
+            aspectRatio: args.aspectRatio,
+            imageUrl: args.imageUrl,
+            endImageUrl: args.endImageUrl,
+            mode: args.mode,
+            generateAudio: args.generateAudio,
+            additionalImages,
+          });
+          const id = submitted?.taskId || submitted?.task_id || submitted?.id;
+          if (!id) {
+            throw new Error(
+              `Submit did not return a taskId. Response: ${JSON.stringify(submitted).slice(0, 300)}`,
+            );
+          }
+          return jsonResult({
+            taskId: id,
+            state: "submitted",
+            next: `Poll aetherwave_get_job with taskId "${id}" and kind "video". Video usually takes 1-8 minutes.`,
+          });
+        }
+
         const { status, taskId } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-video",
           submitBody: {
@@ -768,6 +1036,8 @@ Ask the user only when:
             imageUrl: args.imageUrl,
             endImageUrl: args.endImageUrl,
             mode: args.mode,
+            generateAudio: args.generateAudio,
+            additionalImages,
           },
           statusPath: (id) => `/api/generate-video/status/${id}`,
           timeoutMs: 8 * 60_000,

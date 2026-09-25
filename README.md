@@ -95,12 +95,14 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 
 | Tool | Purpose |
 |------|---------|
+| `aetherwave_list_characters` | Your saved UGC characters with identity block, reference pack, voice and personality |
+| `aetherwave_get_job` | Poll a job submitted with `async: true`, or recover one whose call timed out |
 | `aetherwave_balance` | Current credit balance + plan |
 | `aetherwave_list_image_models` | Enumerate every image model with cost, speed, I2I support |
 | `aetherwave_list_video_models` | Enumerate every video model with cost-per-second, durations, resolutions |
 | `aetherwave_list_master_presets` | Enumerate the 12 mastering presets with target LUFS, tags, descriptions |
 | `aetherwave_generate_image` | T2I or I2I across 8+ models. Default `grok-imagine-t2i` (5 cr, 6 outputs) |
-| `aetherwave_generate_video` | T2V or I2V across 7+ model families. Default `grok-imagine-t2v` with KIE+fal fallback |
+| `aetherwave_generate_video` | T2V or I2V across 7+ model families. Native audio, reference-image identity lock, async submit |
 | `aetherwave_generate_music` | Suno V5.5 by default. Two tracks per submission, lyrics + instrumental |
 | `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (3 cr/image effective, 2 variations) |
 | `aetherwave_upscale_image` | Topaz upscale 1x / 2x / 4x / 8x |
@@ -113,6 +115,67 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
 
 Every generation tool includes a model-selection rubric in its description. Your agent can pick the right model from prompt intent without round-tripping `list_image_models` or `list_video_models`.
+
+## Programmatic video with your own characters
+
+The tools above compose into something the API could not do before: **hand an agent a description and get back a finished multi-shot film, starring a character you already created, with one consistent face and voice throughout.**
+
+A UGC character is a recurring on-screen person you have saved in AetherWave — their locked appearance, an approved pack of reference images, a voice and a personality. `aetherwave_list_characters` is how an agent discovers they exist. Without it, an agent told *"shoot this with my Amy character"* has no way to learn who Amy is, and invents a different face for every clip.
+
+### The loop
+
+```js
+// 1. Discover the character. There is no other way to find them.
+const { characters } = await listCharacters({ name: "amy" });
+const amy = characters[0];
+
+// 2. Build every prompt from her stored identity - VERBATIM, never paraphrased.
+//    Identical text is identical conditioning; that IS the consistency mechanism.
+const prompt = [
+  shotDescription,
+  amy.identityBlock,                    // "CORE IDENTITY: same woman, Nordic, ..."
+  `Her speaking voice: ${amy.voiceSpec ?? amy.voiceDescriptor}`,
+  `She says exactly this and nothing else: "${line}"`,
+].join("\n\n");
+
+// 3. Submit async, anchored to her approved pack, with audio on.
+const { taskId } = await generateVideo({
+  prompt,
+  model: "seedance-2-mini",
+  duration: 12,
+  resolution: "480p",
+  aspectRatio: "16:9",
+  generateAudio: true,                  // without this the clip is SILENT
+  referenceImages: amy.referenceImages, // NOT imageUrl - that drops the anchors
+  async: true,                          // returns in ~2s, survives the client timeout
+});
+
+// 4. Poll until the render lands.
+let job;
+do { await sleep(15000); job = await getJob({ taskId, kind: "video" }); }
+while (!job.done && !job.error);
+
+// 5. Repeat per shot, then assemble the clips in order.
+```
+
+### The four rules that actually keep a character consistent
+
+1. **Append `identityBlock` verbatim to every prompt.** Rewriting it in your own words breaks the lock — identical text is the whole mechanism.
+2. **Pass `referenceImages`, never `imageUrl`.** A first frame switches the engine to first-frame mode and discards the anchors. When a character has an approved pack, that pack *replaces* the hero image rather than riding alongside it; mixing them pulls the face two ways.
+3. **Keep the voice text byte-identical across clips**, for the same reason as the identity block.
+4. **Set `generateAudio: true` on anything with dialogue.** It is off by default and free on Seedance 2.x, so a silent clip is never the cheaper choice — just a worse one.
+
+### Writing lines to length
+
+`duration` is authoritative. The engine honours the seconds you ask for to within ~0.1s and then **fits the line to that length by changing pace**, rather than finishing early. So write the line to the clip, not the clip to the line — roughly **2 words per second** is the measured working figure. A words-per-minute number in a voice description describes the character, not the engine; budgeting by it overran a 22-clip production by 35%.
+
+Spell hard words the way they should be *spoken*: `"super intelligence"` renders more reliably than `"superintelligence"`.
+
+### ⚠️ Verify the speech before you assemble
+
+A take can come back saying the **wrong words** and still report `success` with a URL. Re-rendering an identical prompt has produced one clean take and one that dropped an entire sentence — it is per-take randomness, and nothing in the response distinguishes them. On a 22-clip production, four clips were mis-spoken and none was detectable without listening.
+
+For anything assembled unattended, transcribe each clip and score it against the line you asked for before using it, and re-shoot the ones that fail. Checking costs nothing; the clip already cost credits. Score against **the script**, not against whatever the previous step handed you.
 
 ## Tools reference
 
@@ -159,6 +222,38 @@ T2I or I2I. Submits, polls, returns final URLs.
 
 **Returns:** `{ taskId, state, images, autoSaved, creationIds }`
 
+### `aetherwave_list_characters`
+
+Your saved UGC characters — the recurring, named people you shoot with — with everything needed to hold one consistent across a production. **Call this first whenever a request names a person the user already has.**
+
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | no | Case-insensitive substring filter on name or handle. Omit to list all |
+
+**Returns:** `{ count, characters[], usage }`, each character carrying:
+
+| Field | Why it matters |
+|-------|----------------|
+| `identityBlock` | The locked CORE IDENTITY string. Append **verbatim** to every prompt |
+| `referenceImages` | The approved pack. Pass as `referenceImages` on `generate_video` |
+| `hasApprovedPack` | True when a pack exists — prefer it over `heroImageUrl` |
+| `heroImageUrl` | Single fallback anchor for characters with no pack |
+| `voiceId` / `voiceSpec` / `voiceDescriptor` | Voice conditioning text; keep byte-identical across clips |
+| `personality` | Tones, quirks, speechStyle — the tonal direction the user wrote |
+| `negativeLock` | The character's negative prompt |
+| `engineParams` | Per-mode reference strengths |
+
+### `aetherwave_get_job`
+
+Check a job by `taskId`. Use after an `async: true` submit — **or to recover any generation whose call timed out**, since the job keeps running server-side and saves to your gallery regardless of what happened to the client.
+
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `taskId` | string | yes | Returned by an async submit |
+| `kind` | enum | yes | `video`, `image`, `music`, `video-edit` — picks the status endpoint |
+
+**Returns:** `{ taskId, state, done, videoUrl, imageUrls, error, raw }`
+
 ### `aetherwave_generate_video`
 
 T2V or I2V. Submits, polls up to 8 min, returns final URL.
@@ -173,8 +268,16 @@ T2V or I2V. Submits, polls up to 8 min, returns final URL.
 | `imageUrl` | string | no | — | Required for I2V models |
 | `endImageUrl` | string | no | — | Some I2V models support first+last frame |
 | `mode` | enum | no | `normal` | Grok Imagine: `fun`, `normal`, `spicy` |
+| `generateAudio` | bool | no | `false` | **Render speech/sound with the video.** Clips are SILENT without it. Free on Seedance 2.x at every resolution |
+| `referenceImages` | string[] (max 9) | no | — | Identity anchors held consistent across the clip. Mutually exclusive with `imageUrl`. https URLs are fetched and encoded for you |
+| `async` | bool | no | `false` | Return a `taskId` immediately instead of waiting. **Use this for video** — see below |
 
-**Returns:** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
+**Returns (sync):** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
+**Returns (async):** `{ taskId, state: "submitted", next }`
+
+> ⚠️ **Use `async: true` for video.** A render takes 1–8 minutes and most MCP clients abandon a call at 60 seconds (`MCP error -32001`). The job itself is fine — it is submitted, billed and saved to your gallery regardless — but a synchronous call hands the client a timeout instead of a URL. Async returns the id in ~2 seconds; poll `aetherwave_get_job`.
+
+> ⚠️ **`imageUrl` and `referenceImages` are not additive.** A supplied first frame switches the engine to first-frame mode *exclusively* and drops the reference images — which silently disables the only no-drift mechanism available. Passing both is rejected with an explicit error rather than quietly honouring one.
 
 ### `aetherwave_generate_music`
 
