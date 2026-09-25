@@ -86,6 +86,93 @@ export class AetherwaveClient {
     return await this.handle<T>(res, path);
   }
 
+  /**
+   * Authenticated request with a client-side deadline, for long jobs that must
+   * START and RETURN instead of blocking (the comic tools).
+   *
+   * - On the deadline the fetch is aborted and an error with `timedOut = true`
+   *   is thrown. Aborting only stops OUR wait: the server keeps working, so a
+   *   caller must report "still running, check status", never "failed".
+   * - A 2xx that is not JSON (e.g. a server too old to know `deliver: "url"`
+   *   streaming a 130 MB PDF back) is refused without reading the body, and
+   *   the error carries `notJson = true`.
+   * - Errors carry `status` and `body` exactly like post()/get().
+   */
+  async request<T = any>(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<{ status: number; data: T }> {
+    const controller = new AbortController();
+    const timer = opts.timeoutMs
+      ? setTimeout(() => controller.abort(), opts.timeoutMs)
+      : null;
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers:
+          method === "POST"
+            ? { ...this.authHeaders(), "Content-Type": "application/json" }
+            : this.authHeaders(),
+        body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      if (timer) clearTimeout(timer);
+      if (err?.name === "AbortError") {
+        const e = new Error(
+          `AetherWave API ${path} is still working after ${Math.round(
+            (opts.timeoutMs || 0) / 1000,
+          )}s. The server keeps going; check status instead of retrying.`,
+        );
+        (e as any).timedOut = true;
+        throw e;
+      }
+      throw err;
+    }
+    if (timer) clearTimeout(timer);
+    if (!res.ok) return { status: res.status, data: await this.handle<T>(res, path) };
+    const type = res.headers.get("content-type") || "";
+    if (!type.includes("application/json")) {
+      await res.body?.cancel().catch(() => {});
+      const e = new Error(
+        `AetherWave API ${path} answered ${res.status} with ${type || "no content type"} instead of JSON.`,
+      );
+      (e as any).status = res.status;
+      (e as any).notJson = true;
+      throw e;
+    }
+    return { status: res.status, data: (await res.json()) as T };
+  }
+
+  private identity?: Promise<{ username: string | null; credits: number | null; plan: string | null }>;
+
+  /**
+   * Which account this credential bills, looked up once per client.
+   *
+   * Two MCP connections on one machine resolved to two different accounts on
+   * 2026-09-25 (a user-level env var shadowed the machine one) and nothing in
+   * any tool result said so. Tools that spend credits put this in their result.
+   * Never throws: an unknown account is reported as null, not as a failed tool.
+   */
+  whoami(): Promise<{ username: string | null; credits: number | null; plan: string | null }> {
+    if (!this.identity) {
+      this.identity = this.get<any>("/api/quickstart/balance")
+        .then((d) => ({
+          username: d?.username ?? null,
+          credits: typeof d?.credits === "number" ? d.credits : null,
+          plan: d?.subscription_plan ?? null,
+        }))
+        .catch(() => {
+          this.identity = undefined; // retry on the next call
+          return { username: null, credits: null, plan: null };
+        });
+    }
+    return this.identity;
+  }
+
   private async handle<T>(res: Response, path: string): Promise<T> {
     if (!res.ok) {
       let body: any = null;
