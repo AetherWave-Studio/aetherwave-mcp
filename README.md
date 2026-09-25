@@ -494,7 +494,7 @@ Free. Lays out and letters every page, about 4 seconds a page, and returns at on
 
 #### `aetherwave_comic_export`
 
-Free. Builds the assembled book and returns a download link on AetherWave storage that lasts about a day. Usually finishes within the call (a 12-page PDF took about 15 seconds to build and upload in testing); otherwise it returns an `exportId` to check with a second call.
+Free. Builds the assembled book and returns a download link on AetherWave storage that lasts about a day. Usually finishes within the call (a 12-page PDF took about 15 seconds to build and upload in testing); otherwise it returns an `exportId` to check with a second call. One export builds per account at a time: if one is already building, the tool reports that one (`alreadyExporting: true`, with its `projectId`) instead of starting another. When the service is busy it refuses with `retryAfterSeconds`.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|

@@ -784,7 +784,7 @@ Identify the character by characterId (from aetherwave_comic_create or aetherwav
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       title: "Export a finished comic as a download link",
       description:
-        "Free. Builds the assembled book as 'pdf', 'epub' (fixed-layout, Kindle ready), 'cbz' (comic readers) or 'bundle' (a ZIP of all three plus page PNGs), and returns a download URL that lasts about a day. Files are large (a 12-page PDF measured 130 MB). The build usually finishes within this call; if not, it returns an exportId, and calling again with that exportId returns the link. Assemble first.",
+        "Free. Builds the assembled book as 'pdf', 'epub' (fixed-layout, Kindle ready), 'cbz' (comic readers) or 'bundle' (a ZIP of all three plus page PNGs), and returns a download URL that lasts about a day. Files are large (a 12-page PDF measured 130 MB). The build usually finishes within this call; if not, it returns an exportId, and calling again with that exportId returns the link. One export builds per account at a time: if one is already building, this reports that one (alreadyExporting, with its projectId) instead of starting a second. When the service is busy it refuses with retryAfterSeconds. Assemble first.",
       inputSchema: {
         projectId: z.string().min(1),
         format: z.enum(["pdf", "epub", "cbz", "bundle"]).optional().describe("Default 'pdf'."),
@@ -833,24 +833,47 @@ Identify the character by characterId (from aetherwave_comic_create or aetherwav
             )
           ).data;
         } catch (err: any) {
-          if (err?.notJson) {
+          if (err?.status === 409 && err?.body?.exportId) {
+            // One URL export builds per account at a time: poll the one already running.
+            started = {
+              exportId: err.body.exportId,
+              format: err.body.format,
+              statusPath: err.body.statusPath,
+              alreadyExporting: true,
+            };
+          } else if (err?.status === 429) {
+            return refuse("Too many exports are building on AetherWave right now. Nothing was started; try again shortly.", {
+              retryAfterSeconds: err?.body?.retryAfterSeconds ?? 30,
+            });
+          } else if (err?.notJson) {
             return refuse(
               "This AetherWave server does not support export links yet (it streamed the file instead). Download the book from the Graphic Novel Studio in the web app.",
             );
+          } else {
+            throw err;
           }
-          throw err;
         }
         if (!started?.exportId) {
           return refuse("The export did not start.", { response: started });
         }
         const deadline = Date.now() + EXPORT_WAIT_MS;
+        // A 409 names the job already building for this account, possibly for
+        // another book, so poll the path the server gave rather than rebuilding it.
+        const pollPath: string = started.statusPath || jobPath(started.exportId);
         let job: any = { ...started, exportId: started.exportId, status: "building" };
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 3000));
-          job = await client.get<any>(jobPath(started.exportId));
+          job = await client.get<any>(pollPath);
           if (job.status !== "building") break;
         }
-        const out = await view({ ...job, exportId: started.exportId });
+        const out: Record<string, unknown> = await view({ ...job, exportId: started.exportId });
+        if (started.alreadyExporting) {
+          out.alreadyExporting = true;
+          const m = /\/api\/graphic-novel\/([^/]+)\/export\/jobs\//.exec(pollPath);
+          if (m) out.projectId = decodeURIComponent(m[1]);
+          out.message =
+            "An export was already building for this account (one at a time), so this reports that export instead of starting a new one. It may be a different book or format; check format and url.";
+        }
         return job.status === "error" ? refuse(`Export failed: ${job.error || "unknown error"}`, out) : text(out);
       } catch (err) {
         return fail(err);
