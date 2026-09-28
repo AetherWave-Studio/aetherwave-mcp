@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 import { z } from "zod";
 import { AetherwaveClient } from "./api.js";
 import { registerComicTools } from "./comic.js";
+import { registerMerchTools } from "./merch.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
  * while the package shipped 0.2.9, so every client was told the wrong version at
@@ -1308,6 +1309,9 @@ Ask the user only when:
 
   // ─── comic books (Graphic Novel Engine) ─────────────────────────────────
   registerComicTools(server, client);
+
+  // ─── merch (print-on-demand; printful_* tools only locally, with the user's own token) ──
+  registerMerchTools(server, client, { local: !process.env.AETHERWAVE_MCP_HTTP });
 
   return server;
 }

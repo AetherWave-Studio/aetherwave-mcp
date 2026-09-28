@@ -231,6 +231,47 @@ A take can come back saying the **wrong words** and still report `success` with 
 
 For anything assembled unattended, transcribe each clip and score it against the line you asked for before using it, and re-shoot the ones that fail. Checking costs nothing; the clip already cost credits. Score against **the script**, not against whatever the previous step handed you.
 
+## Sell merch from a conversation (Printful)
+
+Turn any design into a print-on-demand product by asking for it:
+
+> "Make a tee that says NIGHT SHIFT in chrome letters, put it on a black Bella+Canvas 3001, show me mockups, then add it to my Printful store at $29.99."
+
+| Tool | Cost | What it does |
+|---|---|---|
+| `aetherwave_merch_garments` | free | Tees, tanks, hoodies, hats: colours, US in-stock sizes, print areas in inches, embroidery thread colours |
+| `aetherwave_merch_prepare_design` | 1 credit | Any image (AetherWave URL, data URL, or a local file path) becomes a transparent, trimmed print PNG. `knockout` removes a plain background without eating white lettering inside the art |
+| `aetherwave_merch_mockup` | 3 credits | Builds the print file at the garment's real print area and DPI, then renders Printful mockups. Refunded if the render fails; bad garment, colour or placement is never charged. 20 an hour |
+| `aetherwave_merch_mockup_status` | free | Checks a render that outlived the 90-second wait |
+| `aetherwave_printful_create_product` | free | Creates the product in **your own** Printful store |
+| `aetherwave_printful_list_products` | free | Lists your store's products |
+
+### Connect your Printful store
+
+Add your Printful token to the server's env. It is used only between your machine and `api.printful.com`; **it never goes to AetherWave.**
+
+```json
+{
+  "mcpServers": {
+    "aetherwave": {
+      "command": "npx",
+      "args": ["-y", "@aetherwave-studio/mcp"],
+      "env": {
+        "AETHERWAVE_API_KEY": "aw_live_...",
+        "PRINTFUL_API_TOKEN": "your Printful private token",
+        "PRINTFUL_STORE_ID": "only needed for account-level tokens"
+      }
+    }
+  }
+}
+```
+
+Create the token in Printful under Settings > API (a private token scoped to one store is simplest). The two `aetherwave_printful_*` tools appear only when `PRINTFUL_API_TOKEN` is set, and only on the local `npx` server: the remote connector never asks for your store key. Products land in Printful; publishing to Shopify, Etsy and other connected channels happens there as usual.
+
+**Before you promote a product:** Printful charges per order (garment, shipping, and in the US often sales tax). Check that your retail price covers it. You are the seller: only print artwork and wording you have the rights to.
+
+**Printify:** coming next. Its catalog works differently (the same garment from several print providers, with their own prices and stock), so it gets its own tools rather than a half-working flag.
+
 ## Tools reference
 
 ### `aetherwave_balance`
