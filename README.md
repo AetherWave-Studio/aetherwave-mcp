@@ -6,7 +6,7 @@
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
-One install. One token. Twenty-five tools covering:
+One install. One token. Thirty-one default tools covering:
 
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo
@@ -16,11 +16,12 @@ One install. One token. Twenty-five tools covering:
 - **Video utility** - Atlas upscaler (1080p/2K), rembg u2netp background removal, Luma Ray 2 Flash reframe
 - **Audio mastering** - 12 genre/style presets via the AetherWave Python service
 - **Gallery read** - paginated list of your saved creations
-- **Comic books** - the AetherWave Graphic Novel Engine end to end: cast, character references, script, panels, lettered pages, and a PDF / EPUB / CBZ download link
+- **Comic books** - 9 tools driving the AetherWave Graphic Novel Engine end to end: cast, character references, script, panels, lettered pages, and a PDF / EPUB / CBZ download link
+- **Merch** - 4 tools: garment catalog, design-to-mockup, and (with `PRINTFUL_API_TOKEN`) 2 more that create and list products in your own Printful store, plus 1 admin shop-listing tool
 
-Every generation tool submits the job, polls until terminal state, and returns the final URL. The agent gets a single round-trip, no manual polling loop. Results auto-save to your Cloudflare R2 gallery so URLs don't expire.
+Every generation tool submits the job and waits up to a soft 45 s deadline for the result. Fast jobs come back with the final URL in one round-trip; anything longer returns `state: "running"` with a `taskId`, and `aetherwave_get_job` covers every pipeline (image, video, music, mastering, comics, merch) for polling. Pass `async: true` on any tool to return immediately. Results auto-save to your Cloudflare R2 gallery so URLs don't expire.
 
-The comic tools are the exception, on purpose: a book takes about an hour to draw, so each slow step starts and returns at once, and `aetherwave_comic_status` is how the agent checks back. See [Make a comic book with the MCP](#make-a-comic-book-with-the-mcp).
+The comic tools are built around this from the start: a book takes about an hour to draw, so each slow step starts and returns at once, and `aetherwave_comic_status` is how the agent checks back. See [Make a comic book with the MCP](#make-a-comic-book-with-the-mcp).
 
 ## Quick start
 
@@ -728,6 +729,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 ## Versioning
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
+
+**0.3.0** (2026-09-30): soft 45 s deadline on every long tool (returns `state: "running"` + `taskId` instead of timing out the client), `async: true` on every tool, `aetherwave_get_job` covers all pipelines, 9 comic tools, 4 merch tools (+2 Printful tools with `PRINTFUL_API_TOKEN`, +1 admin), 31 default tools.
 
 The MCP protocol version itself (currently `2024-11-05`) is negotiated at handshake time by the SDK; no client config needed.
 
