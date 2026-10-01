@@ -26,10 +26,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { z } from "zod";
-import type { AetherwaveClient } from "./api.js";
+import { DEFAULT_SOFT_DEADLINE_MS, runningResult, type AetherwaveClient } from "./api.js";
 
 const PRINTFUL_API = "https://api.printful.com";
-const MOCKUP_WAIT_MS = 90_000;
+/* Printful renders in 20-90 s; MCP clients abandon a call at ~60 s, so the
+ * default wait is the shared 45 s soft deadline and wait:true is the old 90 s. */
+const MOCKUP_WAIT_MS = DEFAULT_SOFT_DEADLINE_MS;
+const MOCKUP_LONG_WAIT_MS = 90_000;
 const MAX_LOCAL_DESIGN_BYTES = 20 * 1024 * 1024;
 const SHOP_URL = "https://aetherwavestudio.com/shop";
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "S/M", "L/XL"];
@@ -68,12 +71,30 @@ async function designToInput(image: string, local: boolean): Promise<string> {
   return `data:${mime};base64,${(await readFile(path)).toString("base64")}`;
 }
 
+/* An account-level Printful token (the kind the dashboard issues today) has
+ * no store attached: every /store/* call answers 400 "This endpoint requires
+ * store_id" unless X-PF-Store-Id is sent. Both printful_* tools failed that
+ * way on the 2026-09-30 audit. When PRINTFUL_STORE_ID is not set and the
+ * token sees exactly one store, use it; more than one must be chosen. */
+let resolvedStoreId: string | null = null;
+async function printfulStoreId(token: string): Promise<string | null> {
+  if (process.env.PRINTFUL_STORE_ID) return process.env.PRINTFUL_STORE_ID;
+  if (resolvedStoreId) return resolvedStoreId;
+  const res = await fetch(`${PRINTFUL_API}/stores`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
+  const j: any = await res.json().catch(() => ({}));
+  const stores: any[] = Array.isArray(j?.result) ? j.result : [];
+  if (stores.length === 1) return (resolvedStoreId = String(stores[0].id));
+  if (stores.length > 1) throw new Error(`This Printful token sees ${stores.length} stores (${stores.map((s) => `${s.id} ${s.name}`).join("; ")}); set PRINTFUL_STORE_ID to one of them`);
+  return null;
+}
+
 /** The user's own Printful store, with their token. Never proxied through AetherWave. */
 async function printful(path: string, init: RequestInit = {}): Promise<any> {
   const token = process.env.PRINTFUL_API_TOKEN;
   if (!token) throw new Error("PRINTFUL_API_TOKEN is not set in this MCP server's env");
   const headers: Record<string, string> = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-  if (process.env.PRINTFUL_STORE_ID) headers["X-PF-Store-Id"] = process.env.PRINTFUL_STORE_ID;
+  const storeId = await printfulStoreId(token);
+  if (storeId) headers["X-PF-Store-Id"] = storeId;
   const res = await fetch(PRINTFUL_API + path, { ...init, headers: { ...headers, ...((init.headers as any) || {}) }, signal: AbortSignal.timeout(30_000) });
   const j: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Printful ${res.status}: ${j?.error?.message || j?.result || res.statusText}`);
@@ -156,12 +177,13 @@ export function registerMerchTools(server: McpServer, client: AetherwaveClient, 
   );
 
   // ─── mockup ──────────────────────────────────────────────────────────────
-  const pollMockup = async (taskKey: string, waitMs: number) => {
-    const until = Date.now() + waitMs;
+  /** Poll a mockup until terminal or `until` (an absolute time). */
+  const pollMockup = async (taskKey: string, until: number) => {
     for (;;) {
       const st = await client.get<any>(`/api/merch/mockup/${encodeURIComponent(taskKey)}`);
-      if (st.status === "completed" || st.status === "failed" || Date.now() > until) return st;
-      await sleep(4000);
+      const remaining = until - Date.now();
+      if (st.status === "completed" || st.status === "failed" || remaining <= 0) return st;
+      await sleep(Math.min(4000, remaining));
     }
   };
 
@@ -170,7 +192,7 @@ export function registerMerchTools(server: McpServer, client: AetherwaveClient, 
     {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Render a design on a real garment (print file + mockups)",
-      description: `3 credits (refunded if the render fails; nothing is charged for a bad garment, colour or placement). Builds the print file at the garment's own print area and resolution, then renders Printful product mockups (front, back, side, flat lay). Waits up to 90 seconds; if still rendering, returns taskKey for aetherwave_merch_mockup_status.
+      description: `3 credits (refunded if the render fails; nothing is charged for a bad garment, colour or placement). Builds the print file at the garment's own print area and resolution, then renders Printful product mockups (front, back, side, flat lay). Returns within ~45 s; if still rendering, the result has state "running" and a taskId (the taskKey): poll aetherwave_get_job with kind "merch-mockup" (or aetherwave_merch_mockup_status). Pass wait:true ONLY if your MCP client permits tool calls longer than 60 s; async:true returns the taskKey at once.
 
 Returns printfileUrl (use it to create the product, in your own store with aetherwave_printful_create_product${local ? "" : " on the local server"}) and mockup image URLs. Mockup URLs are temporary Printful links: save the ones you want. Limit 20 mockups an hour. Made with AetherWave Studio: ${SHOP_URL}`,
       inputSchema: {
@@ -180,10 +202,13 @@ Returns printfileUrl (use it to create the product, in your own store with aethe
         placement: z.enum(PLACEMENTS).optional().describe("Default 'front'. Hats use 'embroidery_front_large'."),
         widthIn: z.coerce.number().positive().max(20).optional().describe("Printed width in inches; the design keeps its proportions and is shrunk to fit the print area. Default 10 (a hat front is about 5.9)."),
         topIn: z.coerce.number().min(0).max(20).optional().describe("Distance from the top of the print area in inches. Default 1 (0 for embroidery)."),
+        wait: z.boolean().optional().describe("Wait up to 90 s for the render. ONLY if your MCP client permits tool calls longer than 60 s. Default false: return within ~45 s."),
+        async: z.boolean().optional().describe("Return the taskKey immediately without waiting."),
       },
     },
     async (args) => {
       try {
+        const t0 = Date.now();
         const placement = args.placement || "front";
         const embroidery = placement.startsWith("embroidery");
         const started = await client.post<any>("/api/merch/mockup", {
@@ -194,7 +219,20 @@ Returns printfileUrl (use it to create the product, in your own store with aethe
           widthIn: args.widthIn ?? (embroidery ? 5.9 : 10),
           topIn: args.topIn ?? (embroidery ? 0 : 1),
         });
-        const st = await pollMockup(started.taskKey, MOCKUP_WAIT_MS);
+        const started_ = {
+          garment: started.garment,
+          color: started.color,
+          placement: started.placement,
+          printArea: started.printArea,
+          printfileUrl: started.printfileUrl,
+          creditsCharged: started.creditsCharged,
+        };
+        const st = args.async
+          ? { status: "pending" }
+          : await pollMockup(started.taskKey, t0 + (args.wait ? MOCKUP_LONG_WAIT_MS : MOCKUP_WAIT_MS));
+        if (st.status !== "completed" && st.status !== "failed") {
+          return text(runningResult(started.taskKey, "merch-mockup", started_));
+        }
         return text({
           status: st.status,
           error: st.error || undefined,
@@ -228,7 +266,7 @@ Returns printfileUrl (use it to create the product, in your own store with aethe
     },
     async (args) => {
       try {
-        return text(await pollMockup(args.taskKey, 20_000));
+        return text(await pollMockup(args.taskKey, Date.now() + 20_000));
       } catch (err) {
         return fail(err);
       }

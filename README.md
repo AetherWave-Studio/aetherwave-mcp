@@ -79,7 +79,7 @@ In your `~/.continue/config.yaml`:
 
 ```yaml
 mcpServers:
-  - name: aetherwave
+ - name: aetherwave
     command: npx
     args: ["-y", "@aetherwave-studio/mcp"]
     env:
@@ -99,7 +99,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | Tool | Purpose |
 |------|---------|
 | `aetherwave_list_characters` | Your saved UGC characters with identity block, reference pack, voice and personality |
-| `aetherwave_get_job` | Poll a job submitted with `async: true`, or recover one whose call timed out |
+| `aetherwave_get_job` | Poll any job a tool handed back as `state: "running"` (or submitted with `async: true`), or recover one whose call timed out. Covers image, video, video-edit, music, merch-mockup and comic-export |
 | `aetherwave_balance` | Current credit balance + plan |
 | `aetherwave_list_image_models` | Enumerate every image model with cost, speed, I2I support |
 | `aetherwave_list_video_models` | Enumerate every video model with cost-per-second, durations, resolutions |
@@ -174,7 +174,7 @@ and the agent runs this sequence:
 
 The tools above compose into something the API could not do before: **hand an agent a description and get back a finished multi-shot film, starring a character you already created, with one consistent face and voice throughout.**
 
-A UGC character is a recurring on-screen person you have saved in AetherWave — their locked appearance, an approved pack of reference images, a voice and a personality. `aetherwave_list_characters` is how an agent discovers they exist. Without it, an agent told *"shoot this with my Amy character"* has no way to learn who Amy is, and invents a different face for every clip.
+A UGC character is a recurring on-screen person you have saved in AetherWave - their locked appearance, an approved pack of reference images, a voice and a personality. `aetherwave_list_characters` is how an agent discovers they exist. Without it, an agent told *"shoot this with my Amy character"* has no way to learn who Amy is, and invents a different face for every clip.
 
 ### The loop
 
@@ -214,20 +214,20 @@ while (!job.done && !job.error);
 
 ### The four rules that actually keep a character consistent
 
-1. **Append `identityBlock` verbatim to every prompt.** Rewriting it in your own words breaks the lock — identical text is the whole mechanism.
+1. **Append `identityBlock` verbatim to every prompt.** Rewriting it in your own words breaks the lock - identical text is the whole mechanism.
 2. **Pass `referenceImages`, never `imageUrl`.** A first frame switches the engine to first-frame mode and discards the anchors. When a character has an approved pack, that pack *replaces* the hero image rather than riding alongside it; mixing them pulls the face two ways.
 3. **Keep the voice text byte-identical across clips**, for the same reason as the identity block.
-4. **Set `generateAudio: true` on anything with dialogue.** It is off by default and free on Seedance 2.x, so a silent clip is never the cheaper choice — just a worse one.
+4. **Set `generateAudio: true` on anything with dialogue.** It is off by default and free on Seedance 2.x, so a silent clip is never the cheaper choice - just a worse one.
 
 ### Writing lines to length
 
-`duration` is authoritative. The engine honours the seconds you ask for to within ~0.1s and then **fits the line to that length by changing pace**, rather than finishing early. So write the line to the clip, not the clip to the line — roughly **2 words per second** is the measured working figure. A words-per-minute number in a voice description describes the character, not the engine; budgeting by it overran a 22-clip production by 35%.
+`duration` is authoritative. The engine honours the seconds you ask for to within ~0.1s and then **fits the line to that length by changing pace**, rather than finishing early. So write the line to the clip, not the clip to the line - roughly **2 words per second** is the measured working figure. A words-per-minute number in a voice description describes the character, not the engine; budgeting by it overran a 22-clip production by 35%.
 
 Spell hard words the way they should be *spoken*: `"super intelligence"` renders more reliably than `"superintelligence"`.
 
 ### ⚠️ Verify the speech before you assemble
 
-A take can come back saying the **wrong words** and still report `success` with a URL. Re-rendering an identical prompt has produced one clean take and one that dropped an entire sentence — it is per-take randomness, and nothing in the response distinguishes them. On a 22-clip production, four clips were mis-spoken and none was detectable without listening.
+A take can come back saying the **wrong words** and still report `success` with a URL. Re-rendering an identical prompt has produced one clean take and one that dropped an entire sentence - it is per-take randomness, and nothing in the response distinguishes them. On a 22-clip production, four clips were mis-spoken and none was detectable without listening.
 
 For anything assembled unattended, transcribe each clip and score it against the line you asked for before using it, and re-shoot the ones that fail. Checking costs nothing; the clip already cost credits. Score against **the script**, not against whatever the previous step handed you.
 
@@ -304,14 +304,14 @@ T2I or I2I. Submits, polls, returns final URLs.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `prompt` | string | yes | — | Text description of the image |
+| `prompt` | string | yes | - | Text description of the image |
 | `model` | string | no | `grok-imagine-t2i` | Model ID. Use `list_image_models` for full list |
 | `aspectRatio` | string | no | model default | e.g. `1:1`, `16:9`, `9:16` |
 | `resolution` | string | no | model default | `1K`, `2K`, some accept `480p`/`720p` |
-| `referenceImages` | string[] | no | — | URLs for I2I; required if model is I2I |
+| `referenceImages` | string[] | no | - | URLs for I2I; required if model is I2I |
 | `numImages` | int (1-8) | no | model default | For multi-output models |
-| `negative_prompt` | string | no | — | Supported by some models |
-| `seed` | int | no | — | Deterministic generation, supported by some |
+| `negative_prompt` | string | no | - | Supported by some models |
+| `seed` | int | no | - | Deterministic generation, supported by some |
 
 **Selection signals (built into the tool description):** photoreal → `z-image-turbo` or `imagen-4`. Text-in-image → `ideogram-v3-t2i`. NSFW → `wan-2.5-spicy-t2i`. Premium → `grok-imagine-quality-t2i` or `imagen-4-ultra`. Cheapest → `z-image-turbo` (3 cr).
 
@@ -319,7 +319,7 @@ T2I or I2I. Submits, polls, returns final URLs.
 
 ### `aetherwave_list_characters`
 
-Your saved UGC characters — the recurring, named people you shoot with — with everything needed to hold one consistent across a production. **Call this first whenever a request names a person the user already has.**
+Your saved UGC characters - the recurring, named people you shoot with - with everything needed to hold one consistent across a production. **Call this first whenever a request names a person the user already has.**
 
 | Param | Type | Required | Notes |
 |-------|------|----------|-------|
@@ -331,48 +331,69 @@ Your saved UGC characters — the recurring, named people you shoot with — wit
 |-------|----------------|
 | `identityBlock` | The locked CORE IDENTITY string. Append **verbatim** to every prompt |
 | `referenceImages` | The approved pack. Pass as `referenceImages` on `generate_video` |
-| `hasApprovedPack` | True when a pack exists — prefer it over `heroImageUrl` |
+| `hasApprovedPack` | True when a pack exists - prefer it over `heroImageUrl` |
 | `heroImageUrl` | Single fallback anchor for characters with no pack |
 | `voiceId` / `voiceSpec` / `voiceDescriptor` | Voice conditioning text; keep byte-identical across clips |
-| `personality` | Tones, quirks, speechStyle — the tonal direction the user wrote |
+| `personality` | Tones, quirks, speechStyle - the tonal direction the user wrote |
 | `negativeLock` | The character's negative prompt |
 | `engineParams` | Per-mode reference strengths |
 
+### Long jobs return within 45 seconds
+
+MCP clients (claude.ai, Claude Desktop, Cursor) abandon a tool call at about 60 seconds. Before 0.3.0 every long tool blocked for 6 to 15 minutes, so a 90-second image render "failed" on the client while the job finished and was charged, and the taskId died with the abandoned call.
+
+Now every tool that submits a job (`generate_image`, `edit_image`, `upscale_image`, `reframe_image`, `remove_background`, `generate_video`, `upscale_video`, `reframe_video`, `remove_background_video`, `generate_music`, `merch_mockup`, `comic_export`) polls for at most ~45 seconds and then returns:
+
+```json
+{ "state": "running", "taskId": "…", "kind": "image", "checkWith": "aetherwave_get_job", "pollEverySeconds": 10, "next": "…" }
+```
+
+Poll `aetherwave_get_job` with that `taskId` and `kind` until `done`. Two explicit escapes on each of those tools:
+
+| Arg | Effect |
+|-----|--------|
+| `async: true` | Submit and return the taskId immediately, no polling |
+| `wait: true` | The old long block (6-15 min budget). **Only if your client permits calls over 60 s** |
+
+`master_audio` has no job id (the request itself is the job): it also returns within ~45 s, and a master that outlives the call is saved to the gallery - find it with `aetherwave_list_my_creations` type `audio` rather than resubmitting.
+
 ### `aetherwave_get_job`
 
-Check a job by `taskId`. Use after an `async: true` submit — **or to recover any generation whose call timed out**, since the job keeps running server-side and saves to your gallery regardless of what happened to the client.
+Check a job by `taskId`. Use it for any `state: "running"` result, after an `async: true` submit, **or to recover any generation whose call timed out**, since the job keeps running server-side and saves to your gallery regardless of what happened to the client.
 
 | Param | Type | Required | Notes |
 |-------|------|----------|-------|
-| `taskId` | string | yes | Returned by an async submit |
-| `kind` | enum | yes | `video`, `image`, `music`, `video-edit` — picks the status endpoint |
+| `taskId` | string | yes | The taskId (or taskKey / exportId) a tool returned |
+| `kind` | enum | yes | `image` (generate, edit, upscale, reframe, remove-background), `video`, `video-edit` (upscale/reframe/remove-background video), `music`, `merch-mockup`, `comic-export` |
+| `projectId` | string | for `comic-export` | The comic project the export belongs to |
 
-**Returns:** `{ taskId, state, done, videoUrl, imageUrls, error, raw }`
+**Returns:** `{ taskId, kind, state, done, failed, videoUrl, imageUrls, tracks, mockups, downloadUrl, autoSaved, creationIds, error, next, raw }`
 
 ### `aetherwave_generate_video`
 
-T2V or I2V. Submits, polls up to 8 min, returns final URL.
+T2V or I2V. Submits, polls for up to ~45 s, and returns the URL if the render finished - otherwise `state: "running"` with the taskId (video takes 1-8 min, so that is the usual case).
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `prompt` | string | yes | — | Text description of the scene |
+| `prompt` | string | yes | - | Text description of the scene |
 | `model` | string | no | `grok-imagine-t2v` | Model ID. Use `list_video_models` |
 | `duration` | int (2-30) | no | model default | Seconds. Grok accepts 6-15 |
 | `resolution` | enum | no | model default | `480p`, `720p`, `1080p`, `2K` |
 | `aspectRatio` | string | no | model default | e.g. `16:9`, `9:16`, `1:1` |
-| `imageUrl` | string | no | — | Required for I2V models |
-| `endImageUrl` | string | no | — | Some I2V models support first+last frame |
+| `imageUrl` | string | no | - | Required for I2V models |
+| `endImageUrl` | string | no | - | Some I2V models support first+last frame |
 | `mode` | enum | no | `normal` | Grok Imagine: `fun`, `normal`, `spicy` |
 | `generateAudio` | bool | no | `false` | **Render speech/sound with the video.** Clips are SILENT without it. Free on Seedance 2.x at every resolution |
-| `referenceImages` | string[] (max 9) | no | — | Identity anchors held consistent across the clip. Mutually exclusive with `imageUrl`. https URLs are fetched and encoded for you |
-| `async` | bool | no | `false` | Return a `taskId` immediately instead of waiting. **Use this for video** — see below |
+| `referenceImages` | string[] (max 9) | no | - | Identity anchors held consistent across the clip. Mutually exclusive with `imageUrl`. https URLs are fetched and encoded for you |
+| `async` | bool | no | `false` | Return a `taskId` immediately instead of waiting |
+| `wait` | bool | no | `false` | Block up to 8 min. Only if your client permits calls over 60 s |
 
-**Returns (sync):** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
-**Returns (async):** `{ taskId, state: "submitted", next }`
+**Returns (finished):** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
+**Returns (still rendering, or `async`):** `{ state: "running", taskId, kind: "video", checkWith, pollEverySeconds, next }`
 
-> ⚠️ **Use `async: true` for video.** A render takes 1–8 minutes and most MCP clients abandon a call at 60 seconds (`MCP error -32001`). The job itself is fine — it is submitted, billed and saved to your gallery regardless — but a synchronous call hands the client a timeout instead of a URL. Async returns the id in ~2 seconds; poll `aetherwave_get_job`.
+> A render takes 1-8 minutes and most MCP clients abandon a call at 60 seconds (`MCP error -32001`), so this tool returns `state: "running"` within ~45 s and you poll `aetherwave_get_job`. The job itself is submitted, billed and saved to your gallery regardless of what the client does.
 
-> ⚠️ **`imageUrl` and `referenceImages` are not additive.** A supplied first frame switches the engine to first-frame mode *exclusively* and drops the reference images — which silently disables the only no-drift mechanism available. Passing both is rejected with an explicit error rather than quietly honouring one.
+> ⚠️ **`imageUrl` and `referenceImages` are not additive.** A supplied first frame switches the engine to first-frame mode *exclusively* and drops the reference images - which silently disables the only no-drift mechanism available. Passing both is rejected with an explicit error rather than quietly honouring one.
 
 ### `aetherwave_generate_music`
 
@@ -380,11 +401,11 @@ Suno music generation. Two tracks per submission.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `prompt` | string | yes | — | Style/mood/topic description |
+| `prompt` | string | yes | - | Style/mood/topic description |
 | `instrumental` | boolean | no | `false` | If true, no vocals |
 | `model` | enum | no | `V5_5` | `V3_5`, `V4`, `V4_5`, `V5`, `V5_5` |
-| `title` | string | no | — | Optional title for the tracks |
-| `lyrics` | string | no | — | Custom lyrics, omit to let Suno write them |
+| `title` | string | no | - | Optional title for the tracks |
+| `lyrics` | string | no | - | Custom lyrics, omit to let Suno write them |
 
 **Returns:** `{ taskId, status, tracks }`
 
@@ -394,15 +415,15 @@ I2I editing guided by a text prompt.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `prompt` | string | yes | — | Text description of the edit |
-| `imageUrl` | string | yes | — | Public URL of source image |
+| `prompt` | string | yes | - | Text description of the edit |
+| `imageUrl` | string | yes | - | Public URL of source image |
 | `model` | string | no | `grok-imagine-i2i` | 3 cr/image effective, 2 outputs |
 | `aspectRatio` | string | no | source ratio | e.g. `1:1`, `16:9` |
 | `resolution` | string | no | model default | Some models: `1K`, `2K`, `4K` |
 | `quality` | enum | no | model default | `low`, `medium`, `high` (GPT Image) |
-| `maxImages` | int (1-8) | no | — | For multi-output models |
+| `maxImages` | int (1-8) | no | - | For multi-output models |
 | `renderingSpeed` | enum | no | model default | `turbo`, `balanced`, `quality` |
-| `negative_prompt` | string | no | — | Supported by some models |
+| `negative_prompt` | string | no | - | Supported by some models |
 
 **Selection signals:** subtle edits / character consistency → `flux-kontext-pro`. NSFW → `wan-2.5-spicy-i2i`. Highest quality → `gpt-image-1.5-i2i` or `grok-imagine-quality-i2i`. Stylized → `midjourney-i2i`. Single-output / 4K → `seedream-v4-edit`.
 
@@ -416,7 +437,7 @@ Topaz upscaler.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `imageUrl` | string | yes | — | Public URL of source image |
+| `imageUrl` | string | yes | - | Public URL of source image |
 | `upscaleFactor` | enum | no | `2x` | `1x`, `2x`, `4x`, `8x`. Use 8x only on small sources |
 
 Credit cost scales with source resolution × factor.
@@ -429,8 +450,8 @@ Ideogram V3 Reframe. Outpaints edges to fit a new aspect ratio.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `imageUrl` | string | yes | — | Public URL of source image |
-| `aspectRatio` | string | yes | — | Target ratio: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9` |
+| `imageUrl` | string | yes | - | Public URL of source image |
+| `aspectRatio` | string | yes | - | Target ratio: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9` |
 | `speed` | enum | no | `balanced` | `turbo` (5 cr), `balanced` (10 cr), `quality` (14 cr) |
 
 **Returns:** `{ taskId, state, images, autoSaved, creationIds }`
@@ -441,7 +462,7 @@ Recraft primary + fal.ai BiRefNet v2 fallback. ~5 cr per image.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `imageUrl` | string | yes | — | Public URL of source image |
+| `imageUrl` | string | yes | - | Public URL of source image |
 
 **Returns:** `{ taskId, state, images }` (PNG with transparent alpha)
 
@@ -451,7 +472,7 @@ Atlas Video Upscaler. Targets 1080p or 2K.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
+| `videoUrl` | string | yes | - | Public URL of source video (MP4) |
 | `targetResolution` | enum | no | `1080p` | `1080p` (7 cr/s, ≤53s) or `2k` (9 cr/s, ≤23s). Source must be ≤30fps |
 
 **Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
@@ -462,7 +483,7 @@ Frame-by-frame background removal via rembg u2netp on AetherWave's Python servic
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
+| `videoUrl` | string | yes | - | Public URL of source video (MP4) |
 | `bgType` | enum | no | `transparent` | `transparent` = alpha WebM, `color` = solid replacement |
 | `customColor` | string | no | `#00ff00` | Hex color for solid replacement when `bgType: "color"` |
 
@@ -474,9 +495,9 @@ Luma Ray 2 Flash reframe to a new aspect ratio. 17 cr/sec.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `videoUrl` | string | yes | — | Public URL of source video (MP4) |
-| `reframeAspectRatio` | enum | yes | — | `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9` |
-| `reframePrompt` | string | no | — | Optional steering prompt for new edge content (e.g. "extend the sky with sunset clouds") |
+| `videoUrl` | string | yes | - | Public URL of source video (MP4) |
+| `reframeAspectRatio` | enum | yes | - | `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9` |
+| `reframePrompt` | string | no | - | Optional steering prompt for new edge content (e.g. "extend the sky with sunset clouds") |
 
 **Returns:** `{ taskId, status, videoUrl, autoSaved, creationId }`
 
@@ -486,9 +507,9 @@ AI mastering via the AetherWave Python service. Synchronous response (route poll
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `audioUrl` | string | yes | — | Public URL to MP3 or WAV |
-| `preset` | string | yes | — | One of 12 (see below) |
-| `trackTitle` | string | no | — | Optional title for gallery row |
+| `audioUrl` | string | yes | - | Public URL to MP3 or WAV |
+| `preset` | string | yes | - | One of 12 (see below) |
+| `trackTitle` | string | no | - | Optional title for gallery row |
 
 **Preset list (12, retrieved live from `/api/master-presets`):**
 
@@ -669,7 +690,7 @@ See live pricing at https://aetherwavestudio.com/buy-credits or via `aetherwave_
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AETHERWAVE_API_KEY` | yes | — | Your API key. Get one at /profile -> Developer tab. Must start with `aw_live_`. |
+| `AETHERWAVE_API_KEY` | yes | - | Your API key. Get one at /profile -> Developer tab. Must start with `aw_live_`. |
 | `AETHERWAVE_BASE_URL` | no | `https://aetherwavestudio.com` | Override the API base URL (useful for staging or self-hosted). |
 
 ## Troubleshooting
