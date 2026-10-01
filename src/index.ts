@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @aetherwave/mcp — Model Context Protocol server for AetherWave Studio.
+ * @aetherwave/mcp - Model Context Protocol server for AetherWave Studio.
  *
  * Exposes the AetherWave creative-AI API surface as MCP tools so any compliant
  * agent (Claude Code, Cursor, Continue, Claude Desktop, custom MCP clients)
@@ -997,7 +997,7 @@ Pick a different model when the prompt has these signals:
 - Clip 12-15s                                               -> \`grok-imagine-t2v\` (accepts up to 15s)
 - True 4K                                                   -> \`kling-3.0-4k-t2v\` (94 cr/s, expensive but native 4K)
 
-**Audio in generated video:** \`grok-imagine-t2v\`, \`seedance-pro-t2v\`, and the VEO 3.x family include audio at base cost (no surcharge). Kling 2.6 and Kling 3.0 are the outliers — they price audio as a +50-100% surcharge (Kling 2.6 doubles the cost, Kling 3.0 Pro adds ~46%). Default to Grok / Seedance / VEO when sound matters and you don't want to think about audio pricing.
+**Audio in generated video:** \`grok-imagine-t2v\`, \`seedance-pro-t2v\`, and the VEO 3.x family include audio at base cost (no surcharge). Kling 2.6 and Kling 3.0 are the outliers - they price audio as a +50-100% surcharge (Kling 2.6 doubles the cost, Kling 3.0 Pro adds ~46%). Default to Grok / Seedance / VEO when sound matters and you don't want to think about audio pricing.
 
 **Cost framing:** resolution and duration drive cost more than model choice. A 6-second 480p Grok generation costs ~24 cr; the same prompt at 1080p Seedance 2 is ~858 cr (35x more). Pick the lowest acceptable resolution + duration first.
 
@@ -1364,7 +1364,7 @@ Ask the user only when:
       annotations: { readOnlyHint: true, openWorldHint: true },
       title: "List my AetherWave gallery items",
       description:
-        "Returns items from the authenticated user's gallery — images, videos, audio tracks they've generated on AetherWave. Useful for agent workflows like 'find my last 5 images and reframe them all to 9:16' or 'list my recent songs and master each one'. Supports pagination and type filtering. Each item includes id, type, prompt, model, contentUrl, thumbnailUrl, createdAt, isFavorite, visibility, rating, and type-specific fields (duration for audio/video, width/height for images).",
+        "Returns items from the authenticated user's gallery - images, videos, audio tracks they've generated on AetherWave. Useful for agent workflows like 'find my last 5 images and reframe them all to 9:16' or 'list my recent songs and master each one'. Supports pagination and type filtering. Each item includes id, type, prompt, model, contentUrl, thumbnailUrl, createdAt, isFavorite, visibility, rating, and type-specific fields (duration for audio/video, width/height for images).",
       inputSchema: {
         type: z
           .enum(["image", "video", "audio"])
