@@ -9,6 +9,13 @@
 - The docs that quote the tool count or tool list: README.md here, and in the platform repo static/developers.html, static/mcp-landing.html, the KB article `connect-to-claude`, and `scripts/seo/mcp-facts.cjs` (MCP_TOOL_COUNT). When the count changes, the platform docs change in the same release, through a platform PR you open and fable-coo reviews.
 - Contract drift against the platform: when a platform route a tool calls changes shape, this desk finds out first. Keep `E:\Gits\AI-Record-Label-Maker` read-only unless you have claimed a file in its AGENTS-NOW.md and posted the claim in Discord.
 
+## First jobs (in order, from Andrew 2026-10-01: "We need an MCP agent")
+1. **Publish 0.3.0 to npm.** master is tagged v0.3.0 and built; the remote already runs it. npm rejected the publish on 2026-10-01 06:09Z with "account temporarily suspended due to a recent security-sensitive action" (2FA was disabled and re-enabled minutes earlier). Retry `npm publish --access public --otp=<code>` from a clean checkout of master; the OTP is a recovery code Andrew types himself (never in chat, never in a file). Verify `npm view @aetherwave-studio/mcp version` = 0.3.0, then post in Discord and tell fable-coo so the platform docs PRs #725/#727 can merge.
+2. **Rebase the stray commit** `4fa1f70` ("upscale_video: expose 4k/8k and the engine choice") sitting unpushed on the E:\Gitsetherwave-mcp main checkout on top of 0.2.11; it conflicts with master. Rebase onto master, test, PR, release as 0.3.1 with Andrew's go.
+3. **Fix the edit_image tool text** in src/index.ts: it still says "6 cr / 2 variations"; the platform charges 10 for grok-imagine-i2i on every path since #803/#804 (2026-10-01). Ship in 0.3.1.
+4. **Weekly tool audit as a durable cron** (Mondays 07:30 MT): run scripts/audit-tools.mjs with the 300-credit cap, write docs/TOOL-AUDIT-<date>.md, post one Discord line only if a tool fails or a contract drifts.
+5. **master_audio recovery:** propose the platform change (job id on POST /api/master-audio) as a spec for a platform desk; do not edit the platform yourself without a claim.
+
 ## State on 2026-09-30
 - PR #4 (soft deadline, async everywhere, get_job covers image/video/video-edit/music/merch-mockup/comic-export, 34-tool audit 34 pass) is being merged and released as 0.3.0 by a release agent; verify `npm view @aetherwave-studio/mcp version` = 0.3.0 and the remote lists 31 default tools before you touch anything.
 - `aetherwave_master_audio` cannot be recovered by get_job: `POST /api/master-audio` is synchronous with no job id. Candidate platform change, not yet assigned.
