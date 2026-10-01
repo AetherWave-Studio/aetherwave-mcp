@@ -1,0 +1,536 @@
+{
+  "registered": [
+    "aetherwave_list_characters",
+    "aetherwave_get_job",
+    "aetherwave_balance",
+    "aetherwave_list_image_models",
+    "aetherwave_list_master_presets",
+    "aetherwave_list_video_models",
+    "aetherwave_generate_image",
+    "aetherwave_edit_image",
+    "aetherwave_upscale_image",
+    "aetherwave_remove_background",
+    "aetherwave_reframe_image",
+    "aetherwave_upscale_video",
+    "aetherwave_remove_background_video",
+    "aetherwave_reframe_video",
+    "aetherwave_generate_video",
+    "aetherwave_generate_music",
+    "aetherwave_master_audio",
+    "aetherwave_list_my_creations",
+    "aetherwave_comic_estimate",
+    "aetherwave_comic_create",
+    "aetherwave_comic_character_reference",
+    "aetherwave_comic_write_script",
+    "aetherwave_comic_draw",
+    "aetherwave_comic_assemble",
+    "aetherwave_comic_status",
+    "aetherwave_comic_redraw_panel",
+    "aetherwave_comic_export",
+    "aetherwave_merch_garments",
+    "aetherwave_merch_prepare_design",
+    "aetherwave_merch_mockup",
+    "aetherwave_merch_mockup_status",
+    "aetherwave_printful_create_product",
+    "aetherwave_printful_list_products",
+    "aetherwave_shop_create_listing"
+  ],
+  "startBalance": 1997,
+  "endBalance": 1911,
+  "spentByDelta": 86,
+  "spentTracked": 86,
+  "budget": 300,
+  "rows": [
+    {
+      "tool": "aetherwave_balance",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 389,
+      "credits": 0,
+      "note": "",
+      "response": "{\"success\":true,\"username\":\"Boss-Free\",\"credits\":2082,\"subscription_plan\":\"ultimate\"}"
+    },
+    {
+      "tool": "aetherwave_list_characters",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 505,
+      "credits": 0,
+      "note": "",
+      "response": "{\"count\":6,\"characters\":[{\"id\":\"6d1b4899-d8dd-4d12-b551-9fda39372c5b\",\"name\":\"Katie Lee\",\"handle\":\"@Katie_Lee\",\"teamName\":\"ICONIC! UGC Team\",\"status\":\"active\",\"identityBlock\":\"CORE IDENTITY: same woman, Korean, high cheekbones, soft almond eyes, full natural lips, clear smooth skin, 22 years old, 5'8 tall lean, straight jet-black long hair - face identity locked, do not age, do not change ethnicity, do not change face shape\",\"negativeLock\":\"deformed face, different face, face swap, age change, plastic surgery, heavy makeup altering bone structure, different eye color, extra face\",\"referenceImages\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790056366158-9f67fd6d-i"
+    },
+    {
+      "tool": "aetherwave_list_image_models",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 1450,
+      "credits": 0,
+      "note": "",
+      "response": "{\"success\":true,\"models\":{\"grok-imagine-t2i\":{\"name\":\"Grok Imagine\",\"provider\":\"kie\",\"hasNonKieFallback\":true,\"fallbackProvider\":\"atlas\",\"fallbackCredits\":{\"fixed\":6},\"fallbackPriceNote\":\"Grok is busy, so this ran on our backup Grok provider. Same model, one image instead of two.\",\"kieModel\":\"grok-imagine/text-to-image\",\"kieModelI2I\":\"grok-imagine/image-to-image\",\"credits\":{\"tiered\":{\"standard\":6,\"pro\":7}},\"supportsQuality\":true,\"qualityOptions\":[\"standard\",\"pro\"],\"qualityAppliesToI2I\":false,\"outputCount\":2,\"outputCountByQuality\":{\"standard\":2,\"pro\":2},\"outputCountI2I\":1,\"supportsAspectRatio\":true,\"supportsReferenceImages\":true,\"supportsImageEdit\":true,\"maxReferenceImages\":5,\"requiresImage\":"
+    },
+    {
+      "tool": "aetherwave_list_video_models",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 100,
+      "credits": 0,
+      "note": "",
+      "response": "{\"success\":true,\"models\":{\"veo3-fast\":{\"name\":\"VEO 3.1 Fast\",\"kieModel\":\"veo3_fast\",\"credits\":{\"fixed\":84},\"duration\":{\"show\":true,\"options\":[\"4\",\"6\",\"8\"],\"default\":\"8\"},\"aspectRatio\":{\"show\":true,\"options\":[\"16:9\",\"9:16\"],\"default\":\"16:9\"},\"resolution\":{\"show\":false},\"imageSupport\":{\"firstFrame\":true,\"lastFrame\":true,\"reference\":true},\"estimatedTime\":\"~2 mins\",\"provider\":\"KIE.ai\",\"apiProvider\":\"kie\"},\"veo3-quality\":{\"name\":\"VEO 3.1 Quality\",\"kieModel\":\"veo3\",\"credits\":{\"fixed\":350},\"duration\":{\"show\":true,\"options\":[\"4\",\"6\",\"8\"],\"default\":\"8\"},\"aspectRatio\":{\"show\":true,\"options\":[\"16:9\",\"9:16\"],\"default\":\"16:9\"},\"resolution\":{\"show\":false},\"imageSupport\":{\"firstFrame\":true,\"lastFrame\":true"
+    },
+    {
+      "tool": "aetherwave_list_master_presets",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 74,
+      "credits": 0,
+      "note": "",
+      "response": "{\"presets\":[{\"description\":\"Optimized for Spotify, Apple Music, YouTube. Safe and balanced.\",\"difficulty\":\"beginner\",\"dsp\":{\"comp_attack_ms\":15,\"comp_ratio\":2.5,\"comp_release_ms\":150,\"comp_threshold\":-18,\"high_shelf_freq\":10000,\"high_shelf_gain\":1,\"highpass_freq\":30,\"limiter_threshold\":-1,\"low_shelf_freq\":100,\"low_shelf_gain\":0.5},\"icon\":\"📱\",\"id\":\"streaming\",\"name\":\"Streaming Ready\",\"tags\":[\"spotify\",\"apple music\",\"youtube\",\"general\"],\"target_lufs\":-14},{\"description\":\"Maximum impact for competitive loudness. Use sparingly.\",\"difficulty\":\"intermediate\",\"dsp\":{\"comp_attack_ms\":5,\"comp_ratio\":4,\"comp_release_ms\":80,\"comp_threshold\":-15,\"high_shelf_freq\":8000,\"high_shelf_gain\":2,\"highpass_freq"
+    },
+    {
+      "tool": "aetherwave_list_my_creations",
+      "args": {
+        "type": "video",
+        "limit": 300
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 644,
+      "credits": 0,
+      "note": "",
+      "response": "{\"items\":[{\"id\":\"d947170c-eeef-40a1-a557-f6bbecd66a4b\",\"type\":\"video\",\"title\":\"AetherWave Studio audit: a neon pink and cyan waveform over a dark studio desk, minimal, no text, sl\",\"prompt\":\"\",\"model\":\"grok-imagine-t2v\",\"createdAt\":\"2026-09-30T23:46:20.465Z\",\"isFavorite\":false,\"contentUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/video/1790811978558-3cb5bbfc-video-aac5a214.mp4\",\"thumbnailUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811979536-ce169b4a-video-thumb-1790811979536.png\",\"visibility\":\"private\",\"rating\":\"general\",\"duration\":6,\"likeCount\":0,\"totalPlays\":0,\"metadata\":{\"model\":\"grok-imagine-t2v\",\"prompt\":\"AetherWave Studio audit:"
+    },
+    {
+      "tool": "aetherwave_generate_image",
+      "args": {
+        "prompt": "AetherWave Studio audit: a neon pink and cyan waveform over a dark studio desk, minimal, no text",
+        "model": "z-image-turbo",
+        "aspectRatio": "1:1"
+      },
+      "est": 3,
+      "result": "pass",
+      "ms": 16067,
+      "credits": 2,
+      "note": "",
+      "response": "{\"taskId\":\"img_1790811854674_4znyhq6m6\",\"state\":\"SUCCESS\",\"images\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png\"],\"autoSaved\":true,\"creationIds\":[]}"
+    },
+    {
+      "tool": "aetherwave_get_job",
+      "args": {
+        "taskId": "img_1790811854674_4znyhq6m6",
+        "kind": "image"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 80,
+      "credits": 0,
+      "note": "",
+      "response": "{\"taskId\":\"img_1790811854674_4znyhq6m6\",\"kind\":\"image\",\"state\":\"SUCCESS\",\"done\":true,\"failed\":false,\"videoUrl\":null,\"imageUrls\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png\"],\"autoSaved\":true,\"error\":null,\"raw\":{\"taskId\":\"img_1790811854674_4znyhq6m6\",\"state\":\"SUCCESS\",\"model\":\"z-image-turbo\",\"prompt\":\"AetherWave Studio audit: a neon pink and cyan waveform over a dark studio desk, minimal, no text\",\"userId\":\"107652780671781232089\",\"creditCost\":2,\"perImageCost\":0,\"isPerImageModel\":false,\"fixedCost\":2,\"admissionCharge\":2,\"actualCreditCost\":2,\"isGrokFreeGen\":false,\"grokFreeAllowance\":100,\"createdAt\":1790811854810,\"images\":[\"http"
+    },
+    {
+      "tool": "aetherwave_edit_image",
+      "args": {
+        "prompt": "make the waveform gold",
+        "imageUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png",
+        "model": "grok-imagine-i2i"
+      },
+      "est": 6,
+      "result": "pass",
+      "ms": 15992,
+      "credits": 10,
+      "note": "",
+      "response": "{\"taskId\":\"img_1790811872030_zcrsmardw\",\"state\":\"SUCCESS\",\"images\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811884467-69a7690f-image-8913830f.jpg\"],\"autoSaved\":true,\"creationIds\":[]}"
+    },
+    {
+      "tool": "aetherwave_upscale_image",
+      "args": {
+        "imageUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png",
+        "upscaleFactor": "2x"
+      },
+      "est": 12,
+      "result": "pass",
+      "ms": 5751,
+      "credits": 4,
+      "note": "",
+      "response": "{\"taskId\":\"img_1790811888882_qq8rtgxyr\",\"state\":\"SUCCESS\",\"images\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811892436-22c406e0-image-bc851b4d.png\"],\"autoSaved\":true,\"creationIds\":[]}"
+    },
+    {
+      "tool": "aetherwave_remove_background",
+      "args": {
+        "imageUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png"
+      },
+      "est": 5,
+      "result": "pass",
+      "ms": 8269,
+      "credits": 5,
+      "note": "",
+      "response": "{\"taskId\":\"bg-1790811895252-jfb0yhdww\",\"state\":\"SUCCESS\",\"images\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811901769-869332cc-image-81e746e3.png\"]}"
+    },
+    {
+      "tool": "aetherwave_reframe_image",
+      "args": {
+        "imageUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png",
+        "aspectRatio": "16:9",
+        "speed": "turbo"
+      },
+      "est": 5,
+      "result": "pass (running -> get_job done)",
+      "ms": 45061,
+      "credits": 5,
+      "note": "",
+      "response": "{\"state\":\"running\",\"taskId\":\"reframe-1790812682844-s1zci4di6\",\"kind\":\"image\",\"checkWith\":\"aetherwave_get_job\",\"pollEverySeconds\":10,\"next\":\"Still rendering server-side (already submitted and billed; the result lands in the gallery either way). Poll aetherwave_get_job with taskId \\\"reframe-1790812682844-s1zci4di6\\\" and kind \\\"image\\\" every ~10 s until state is done.\",\"lastState\":\"PROCESSING\"}",
+      "followed": {
+        "polls": 1,
+        "ms": 10135,
+        "final": "{\"taskId\":\"reframe-1790812682844-s1zci4di6\",\"kind\":\"image\",\"state\":\"SUCCESS\",\"done\":true,\"failed\":false,\"videoUrl\":null,\"imageUrls\":[\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790812731576-8e6a8049-image-ad00d3c8.png\"],\"autoSaved\":true,\"error\":null,\"raw\":{\"taskId\":\"reframe-1790812682844-s1zci4di6\",\"state\":\"SUCCESS\",\"model\":\"ideogram-v3-reframe\",\"userId\":\"107652780671781232089\",\"creditCost\":5,\"createdAt\":1790812682844,\"images\":[\"https://media.aetherwavestudio.com/users"
+      }
+    },
+    {
+      "tool": "aetherwave_generate_video",
+      "args": {
+        "prompt": "AetherWave Studio audit: a neon pink and cyan waveform over a dark studio desk, minimal, no text, slow camera push in",
+        "model": "grok-imagine-t2v",
+        "duration": 6,
+        "resolution": "480p",
+        "aspectRatio": "16:9"
+      },
+      "est": 24,
+      "result": "pass",
+      "ms": 40565,
+      "credits": 29,
+      "note": "",
+      "response": "{\"taskId\":\"task_1790811941906_e8mq1pk8t\",\"state\":\"success\",\"videoUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/video/1790811978558-3cb5bbfc-video-aac5a214.mp4\",\"fallbackProvider\":null,\"autoSaved\":true,\"creationId\":\"d947170c-eeef-40a1-a557-f6bbecd66a4b\",\"kieTaskId\":\"8c00e0c7047781b436616d053e8379fc\"}"
+    },
+    {
+      "tool": "aetherwave_upscale_video",
+      "args": {
+        "videoUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/video/1790383840198-4d2985e2-video-c13a43ab.mp4",
+        "targetResolution": "1080p"
+      },
+      "est": 21,
+      "result": "pass",
+      "ms": 24146,
+      "credits": 22,
+      "note": "",
+      "response": "{\"taskId\":\"edit_1790812741077_p6nqkprlh\",\"status\":\"COMPLETED\",\"videoUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/video/1790812760602-fa153bec-video-abce9fb7.mp4\",\"autoSaved\":true,\"creationId\":\"a9ab9581-b900-4d60-9f3a-6a5d9324bc38\"}"
+    },
+    {
+      "tool": "aetherwave_remove_background_video",
+      "args": {
+        "videoUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/video/1790383840198-4d2985e2-video-c13a43ab.mp4",
+        "bgType": "color",
+        "customColor": "#00ff00"
+      },
+      "est": 6,
+      "result": "pass (running -> get_job done)",
+      "ms": 45115,
+      "credits": 7,
+      "note": "",
+      "response": "{\"state\":\"running\",\"taskId\":\"edit_1790812763750_wychlmemn\",\"kind\":\"video-edit\",\"checkWith\":\"aetherwave_get_job\",\"pollEverySeconds\":10,\"next\":\"Still rendering server-side (already submitted and billed; the result lands in the gallery either way). Poll aetherwave_get_job with taskId \\\"edit_1790812763750_wychlmemn\\\" and kind \\\"video-edit\\\" every ~10 s until state is done.\",\"lastState\":\"PROCESSING\"}",
+      "followed": {
+        "polls": 7,
+        "ms": 71014,
+        "final": "{\"taskId\":\"edit_1790812763750_wychlmemn\",\"kind\":\"video-edit\",\"state\":\"COMPLETED\",\"done\":true,\"failed\":false,\"videoUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/video/1790812871613-fae48058-bg_removed_1790812871468.mp4\",\"imageUrls\":null,\"autoSaved\":true,\"creationIds\":[\"a920ba04-f79f-4894-94bc-9bc9664c8e20\"],\"error\":null,\"raw\":{\"success\":true,\"taskId\":\"edit_1790812763750_wychlmemn\",\"status\":\"COMPLETED\",\"progress\":100,\"resultUrl\":\"https://media.aetherwavestudio.com/users/1076"
+      }
+    },
+    {
+      "tool": "aetherwave_reframe_video",
+      "args": {
+        "videoUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/video/1790383840198-4d2985e2-video-c13a43ab.mp4",
+        "reframeAspectRatio": "9:16"
+      },
+      "est": 51,
+      "result": "pass (running -> get_job done)",
+      "ms": 45117,
+      "credits": 52,
+      "note": "",
+      "response": "{\"state\":\"running\",\"taskId\":\"edit_1790812880955_4aavfc0nv\",\"kind\":\"video-edit\",\"checkWith\":\"aetherwave_get_job\",\"pollEverySeconds\":10,\"next\":\"Still rendering server-side (already submitted and billed; the result lands in the gallery either way). Poll aetherwave_get_job with taskId \\\"edit_1790812880955_4aavfc0nv\\\" and kind \\\"video-edit\\\" every ~10 s until state is done.\",\"lastState\":\"PROCESSING\"}",
+      "followed": {
+        "polls": 8,
+        "ms": 81316,
+        "final": "{\"taskId\":\"edit_1790812880955_4aavfc0nv\",\"kind\":\"video-edit\",\"state\":\"COMPLETED\",\"done\":true,\"failed\":false,\"videoUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/video/1790812995723-0e6a501e-video-833393e4.mp4\",\"imageUrls\":null,\"autoSaved\":true,\"creationIds\":[\"593438ba-937a-4f42-a028-c72ea91c98db\"],\"error\":null,\"raw\":{\"success\":true,\"taskId\":\"edit_1790812880955_4aavfc0nv\",\"status\":\"COMPLETED\",\"progress\":100,\"resultUrl\":\"https://media.aetherwavestudio.com/users/10765278067178"
+      }
+    },
+    {
+      "tool": "aetherwave_generate_music",
+      "args": {
+        "prompt": "lo-fi hip hop, warm, short",
+        "lyrics": "Neon lights on a quiet street\nWaveforms rolling to the beat",
+        "title": "MCP Audit 0930",
+        "vocalGender": "f",
+        "model": "V4_5"
+      },
+      "est": 20,
+      "result": "pass",
+      "ms": 25311,
+      "credits": 20,
+      "note": "",
+      "response": "{\"taskId\":\"0900bd2be5b40b5fe8fe545725b20030\",\"status\":\"SUCCESS\",\"tracks\":[{\"id\":\"2af4ebd7-e73e-4063-a384-f934eb6cb7d9\",\"title\":\"MCP Audit 0930\",\"audioUrl\":\"https://tempfile.aiquickdraw.com/r/2af4ebd7-e73e-4063-a384-f934eb6cb7d9.mp3\",\"streamAudioUrl\":\"https://audiostream.kie.ai/stream/2af4ebd7-e73e-4063-a384-f934eb6cb7d9.mp3\",\"imageUrl\":\"https://musicfile.kie.ai/MmFmNGViZDctZTczZS00MDYzLWEzODQtZjkzNGViNmNiN2Q5.jpeg\",\"prompt\":\"Neon lights on a quiet street\\nWaveforms rolling to the beat\",\"tags\":\"lo-fi hip hop, warm, short\",\"duration\":12.76},{\"id\":\"b8f0e0c1-051a-435b-b20e-97273047c6f3\",\"title\":\"MCP Audit 0930\",\"audioUrl\":\"https://tempfile.aiquickdraw.com/r/b8f0e0c1-051a-435b-b20e-97273047c6f3.m"
+    },
+    {
+      "tool": "aetherwave_master_audio",
+      "args": {
+        "audioUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/audio/1790723358329-cfe9a674-audio-eb86b071.mp3",
+        "preset": "streaming",
+        "trackTitle": "MCP audit master"
+      },
+      "est": 20,
+      "result": "pass",
+      "ms": 6614,
+      "credits": 0,
+      "note": "",
+      "response": "{\"success\":true,\"masteredUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/audio/1790812015124-05f60f95-audio-1a70e0ff.wav\",\"preset\":\"streaming\",\"trackTitle\":\"MCP audit master\",\"creditsCharged\":0,\"isFree\":true}"
+    },
+    {
+      "tool": "aetherwave_comic_estimate",
+      "args": {
+        "pageCount": 12
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 681,
+      "credits": 0,
+      "note": "",
+      "response": "{\"account\":\"Boss-Free\",\"scriptCredits\":30,\"panelCredits\":432,\"assumedPanels\":48,\"creditsPerPanel\":9,\"totalCredits\":462,\"imageModel\":\"gpt-image-2\",\"note\":\"Upper-bound quote at 4 panels a page. Character references are extra (6 credits each).\"}"
+    },
+    {
+      "tool": "aetherwave_comic_status",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 923,
+      "credits": 0,
+      "note": "",
+      "response": "{\"account\":\"Boss-Free\",\"total\":17,\"projects\":[{\"projectId\":\"4b9a8e69-954b-4cd5-a25c-f122100064b5\",\"title\":\"MCP audit throwaway\",\"status\":\"draft\",\"pages\":4,\"artStyle\":\"webtoon\",\"updatedAt\":\"2026-09-30T23:47:00.089Z\"},{\"projectId\":\"f4a21ddc-8497-4435-be27-94513f3cd120\",\"title\":\"The Last Balloon Post\",\"status\":\"complete\",\"pages\":12,\"artStyle\":\"franco-belgian\",\"updatedAt\":\"2026-09-25T10:25:59.508Z\"},{\"projectId\":\"b91bc53c-d7d4-4bd7-9d0a-c5ae05c8c632\",\"title\":\"END OF ETERNITY: Issue #381 — “Neon Sky”\",\"status\":\"complete\",\"pages\":12,\"artStyle\":\"hyper-realistic\",\"updatedAt\":\"2026-07-13T11:29:58.428Z\"},{\"projectId\":\"ad79d92e-34d1-429a-90f0-4b6adee29d21\",\"title\":\"The Great Galactic Bake-Off of Planet"
+    },
+    {
+      "tool": "aetherwave_comic_character_reference",
+      "args": {
+        "projectId": "f4a21ddc-8497-4435-be27-94513f3cd120",
+        "action": "approve",
+        "characterId": "03a83789-6f63-4f89-86b0-8d5610f69c2c",
+        "imageUrl": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790320278740-e128217a-image-e06d3193.jpg"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 1196,
+      "credits": 0,
+      "note": "re-approves the already approved image (free, idempotent)",
+      "response": "{\"account\":\"Boss-Free\",\"approved\":true,\"characterId\":\"03a83789-6f63-4f89-86b0-8d5610f69c2c\",\"characterName\":\"Odile Marchand\",\"referenceImageUrl\":\"https://media.aetherwavestudio.com/users/107652780671781232089/image/1790320278740-e128217a-image-e06d3193.jpg\"}"
+    },
+    {
+      "tool": "aetherwave_comic_write_script",
+      "args": {
+        "projectId": "f4a21ddc-8497-4435-be27-94513f3cd120"
+      },
+      "est": 0,
+      "result": "pass (refused as designed: existing panels, replaceExisting not set)",
+      "ms": 747,
+      "credits": 0,
+      "note": "expected: refused, the book already has panels",
+      "response": "{\"refused\":true,\"message\":\"This project already has 27 panels (27 drawn). Writing a new script deletes all of them. Pass replaceExisting: true only if that is intended.\"}"
+    },
+    {
+      "tool": "aetherwave_comic_draw",
+      "args": {
+        "projectId": "f4a21ddc-8497-4435-be27-94513f3cd120"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 927,
+      "credits": 0,
+      "note": "expected: nothing to draw on a finished book",
+      "response": "{\"account\":\"Boss-Free\",\"started\":false,\"message\":\"Every panel is already drawn. Call aetherwave_comic_assemble.\"}"
+    },
+    {
+      "tool": "aetherwave_comic_assemble",
+      "args": {
+        "projectId": "f4a21ddc-8497-4435-be27-94513f3cd120"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 946,
+      "credits": 0,
+      "note": "re-assembles the finished demo book (free)",
+      "response": "{\"account\":\"Boss-Free\",\"started\":true,\"pages\":12,\"message\":\"Assembling 12 pages\",\"nextStep\":\"Check aetherwave_comic_status in about a minute; projectStatus becomes 'complete'.\"}"
+    },
+    {
+      "tool": "aetherwave_comic_redraw_panel",
+      "args": {},
+      "est": 0,
+      "result": "not run (9 cr and it permanently replaces a panel of a finished book)",
+      "ms": 0,
+      "credits": 0,
+      "note": ""
+    },
+    {
+      "tool": "aetherwave_comic_export",
+      "args": {
+        "projectId": "f4a21ddc-8497-4435-be27-94513f3cd120",
+        "format": "cbz"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 18784,
+      "credits": 0,
+      "note": "",
+      "response": "{\"account\":\"Boss-Free\",\"exportId\":\"08ca3f7c-ed2d-4771-8566-19483a69b52b\",\"format\":\"cbz\",\"status\":\"complete\",\"url\":\"https://media.aetherwavestudio.com/tmp/uploads/107652780671781232089/gn-export-08ca3f7c-ed2d-4771-8566-19483a69b52b-The-Last-Balloon-Post.cbz\",\"megabytes\":140.4,\"note\":\"The link expires after about a day. Download or re-host it.\"}"
+    },
+    {
+      "tool": "aetherwave_comic_create",
+      "args": {
+        "title": "MCP audit throwaway",
+        "premise": "A studio robot audits its own tools and finds one that lies.",
+        "genre": "sci-fi",
+        "artStyle": "webtoon",
+        "pageCount": 4,
+        "characters": [
+          {
+            "name": "Auditor",
+            "role": "protagonist",
+            "visualDescription": "a small chrome robot with a clipboard and one glowing cyan eye"
+          }
+        ]
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 1034,
+      "credits": 0,
+      "note": "leaves a draft project on the account; delete from the Graphic Novel Studio",
+      "response": "{\"account\":\"Boss-Free\",\"projectId\":\"4b9a8e69-954b-4cd5-a25c-f122100064b5\",\"status\":\"draft\",\"characters\":[{\"characterId\":\"02e4c527-4f0c-4b19-a4e8-f6af9bee1610\",\"name\":\"Auditor\",\"role\":\"protagonist\"}],\"estimate\":{\"scriptCredits\":14,\"panelCredits\":144,\"totalCredits\":158,\"note\":\"Upper bound at 4 panels a page; references are 6 credits each on top.\"},\"nextStep\":\"Call aetherwave_comic_character_reference with action 'generate' for each character, then 'approve' the one you want.\"}"
+    },
+    {
+      "tool": "aetherwave_merch_garments",
+      "args": {},
+      "est": 0,
+      "result": "pass",
+      "ms": 216,
+      "credits": 0,
+      "note": "",
+      "response": "{\"garments\":[{\"id\":71,\"label\":\"Staple Tee\",\"model\":\"Bella+Canvas 3001\"},{\"id\":586,\"label\":\"Heavyweight Garment-Dyed Tee\",\"model\":\"Comfort Colors 1717\"},{\"id\":438,\"label\":\"Classic Tee\",\"model\":\"Gildan 5000\"},{\"id\":360,\"label\":\"Women's Relaxed Tee\",\"model\":\"Bella+Canvas 6400\"},{\"id\":248,\"label\":\"Staple Tank\",\"model\":\"Bella+Canvas 3480\"},{\"id\":907,\"label\":\"Garment-Dyed Tank\",\"model\":\"Comfort Colors 9360\"},{\"id\":146,\"label\":\"Heavy Blend Hoodie\",\"model\":\"Gildan 18500\"},{\"id\":380,\"label\":\"Premium Hoodie\",\"model\":\"Cotton Heritage M2580\"}],\"note\":\"Any Printful catalog product id also works with GET /api/merch/garments/:id\"}"
+    },
+    {
+      "tool": "aetherwave_merch_prepare_design",
+      "args": {
+        "image": "https://media.aetherwavestudio.com/users/107652780671781232089/image/1790811867778-d36eaf1c-image-8b00741e.png",
+        "knockout": false
+      },
+      "est": 1,
+      "result": "pass",
+      "ms": 898,
+      "credits": 1,
+      "note": "",
+      "response": "{\"designUrl\":\"https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/design.png\",\"width\":1024,\"height\":1024,\"hadTransparency\":false,\"knockout\":false,\"tolerance\":24,\"creditsCharged\":1,\"note\":\"This image had a solid background, which prints as a box. Run again with knockout=true unless that is intended.\",\"next\":\"aetherwave_merch_mockup with this designUrl\"}"
+    },
+    {
+      "tool": "aetherwave_merch_mockup",
+      "args": {
+        "designUrl": "https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/design.png",
+        "garmentId": 71,
+        "color": "Black",
+        "placement": "front",
+        "widthIn": 8
+      },
+      "est": 3,
+      "result": "pass",
+      "ms": 11223,
+      "credits": 3,
+      "note": "",
+      "response": "{\"status\":\"completed\",\"garment\":\"Unisex Staple T-Shirt | Bella + Canvas 3001\",\"color\":\"Black\",\"placement\":\"front\",\"printArea\":{\"widthIn\":12,\"heightIn\":16,\"dpi\":150},\"printfileUrl\":\"https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/printfile-front-1800x2400-1790812370063.png\",\"mockups\":[{\"title\":\"front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/26680173db280de69323a3b7c8d65213/unisex-staple-t-shirt-black-front-6abda0d75d793.jpg\"},{\"title\":\"Front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/711fbab79d38e80bcd1e7a772540dbd0/unisex-staple-t-shirt-black-front-6abda0d75e149.jpg\"},{\"title\":\"Back\",\"url\":\"https://printful-uploa"
+    },
+    {
+      "tool": "aetherwave_merch_mockup",
+      "args": {
+        "designUrl": "https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/design.png",
+        "garmentId": 71,
+        "color": "Black",
+        "placement": "front",
+        "widthIn": 8,
+        "async": true
+      },
+      "est": 3,
+      "result": "pass",
+      "ms": 1209,
+      "credits": 3,
+      "note": "async:true",
+      "response": "{\"state\":\"running\",\"taskId\":\"gt-976577900\",\"kind\":\"merch-mockup\",\"checkWith\":\"aetherwave_get_job\",\"pollEverySeconds\":10,\"next\":\"Still rendering server-side (already submitted and billed; the result lands in the gallery either way). Poll aetherwave_get_job with taskId \\\"gt-976577900\\\" and kind \\\"merch-mockup\\\" every ~10 s until state is done.\",\"garment\":\"Unisex Staple T-Shirt | Bella + Canvas 3001\",\"color\":\"Black\",\"placement\":\"front\",\"printArea\":{\"widthIn\":12,\"heightIn\":16,\"dpi\":150},\"printfileUrl\":\"https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/printfile-front-1800x2400-1790812382151.png\",\"creditsCharged\":3}"
+    },
+    {
+      "tool": "aetherwave_merch_mockup_status",
+      "args": {
+        "taskKey": "gt-976577900"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 9683,
+      "credits": 0,
+      "note": "",
+      "response": "{\"status\":\"completed\",\"error\":null,\"mockups\":[{\"title\":\"front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/1fa7a7a3b0a8ae86114251cdb4482612/unisex-staple-t-shirt-black-front-6abda0e2c72ff.jpg\"},{\"title\":\"Front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/6651920e9b46cc60f7b0951e3669c15b/unisex-staple-t-shirt-black-front-6abda0e2c7954.jpg\"},{\"title\":\"Back\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/4d7b1cee64a3ac6b080d71285ac3aa60/unisex-staple-t-shirt-black-back-6abda0e2c7d6c.jpg\"},{\"title\":\"Back\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/fffdbb7063c5c4e8f68afb5d88af1dd9/unisex-staple-t-shirt-black-back-6abda0e2c8"
+    },
+    {
+      "tool": "aetherwave_get_job",
+      "args": {
+        "taskId": "gt-976577900",
+        "kind": "merch-mockup"
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 322,
+      "credits": 0,
+      "note": "merch-mockup kind",
+      "response": "{\"taskId\":\"gt-976577900\",\"kind\":\"merch-mockup\",\"state\":\"completed\",\"done\":true,\"failed\":false,\"videoUrl\":null,\"imageUrls\":null,\"mockups\":[{\"title\":\"front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/1fa7a7a3b0a8ae86114251cdb4482612/unisex-staple-t-shirt-black-front-6abda0e2c72ff.jpg\"},{\"title\":\"Front\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/6651920e9b46cc60f7b0951e3669c15b/unisex-staple-t-shirt-black-front-6abda0e2c7954.jpg\"},{\"title\":\"Back\",\"url\":\"https://printful-upload.s3-accelerate.amazonaws.com/tmp/4d7b1cee64a3ac6b080d71285ac3aa60/unisex-staple-t-shirt-black-back-6abda0e2c7d6c.jpg\"},{\"title\":\"Back\",\"url\":\"https://printful-upload.s3-accelerate.am"
+    },
+    {
+      "tool": "aetherwave_printful_list_products",
+      "args": {
+        "limit": 3
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 472,
+      "credits": 0,
+      "note": "",
+      "response": "[{\"id\":475806483,\"name\":\"ICONIC! - Stop Being Poor\",\"variants\":6,\"synced\":6,\"thumbnail\":\"https://media.aetherwavestudio.com/shop/merch/stop-being-poor-9ae0/listing-1.jpg\"},{\"id\":475786802,\"name\":\"ICONIC! - Make America Goth Again Hat\",\"variants\":2,\"synced\":2,\"thumbnail\":\"https://media.aetherwavestudio.com/shop/merch/make-america-goth-again-hat-577e/listing-1.jpg\"},{\"id\":475786103,\"name\":\"ICONIC! - Make America Goth Again Tee\",\"variants\":9,\"synced\":9,\"thumbnail\":\"https://media.aetherwavestudio.com/shop/merch/make-america-goth-again-tee-3f8a/listing-1.jpg\"}]"
+    },
+    {
+      "tool": "aetherwave_printful_create_product",
+      "args": {
+        "name": "MCP AUDIT 2026-09-30 (delete me)",
+        "garmentId": 71,
+        "color": "Black",
+        "placement": "front",
+        "printfileUrl": "https://media.aetherwavestudio.com/merch/107652780671781232089/1790812022129-d05a53/printfile-front-1800x2400-1790812370063.png",
+        "retailPrice": 29.99,
+        "sizes": [
+          "M"
+        ]
+      },
+      "est": 0,
+      "result": "pass",
+      "ms": 562,
+      "credits": 0,
+      "note": "created then deleted again via Printful API in the same run; DELETE -> 400; DELETE -> 404",
+      "response": "{\"created\":true,\"printfulProductId\":476694562,\"name\":\"MCP AUDIT 2026-09-30 (delete me)\",\"sizes\":[\"M\"],\"retailPrice\":\"29.99\",\"note\":\"Check Printful's cost for this garment, plus shipping and any tax, against your retail price before promoting it.\"}"
+    },
+    {
+      "tool": "aetherwave_shop_create_listing",
+      "args": {},
+      "est": 0,
+      "result": "not run (creates a real product in AetherWave's Printful store and a /shop listing; not reversible from the tool)",
+      "ms": 0,
+      "credits": 0,
+      "note": ""
+    }
+  ],
+  "credits_all_runs": {
+    "run1": 74,
+    "run2": 11,
+    "run3": 86,
+    "total": 171,
+    "cap": 300
+  }
+}

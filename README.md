@@ -99,7 +99,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | Tool | Purpose |
 |------|---------|
 | `aetherwave_list_characters` | Your saved UGC characters with identity block, reference pack, voice and personality |
-| `aetherwave_get_job` | Poll a job submitted with `async: true`, or recover one whose call timed out |
+| `aetherwave_get_job` | Poll any job a tool handed back as `state: "running"` (or submitted with `async: true`), or recover one whose call timed out. Covers image, video, video-edit, music, merch-mockup and comic-export |
 | `aetherwave_balance` | Current credit balance + plan |
 | `aetherwave_list_image_models` | Enumerate every image model with cost, speed, I2I support |
 | `aetherwave_list_video_models` | Enumerate every video model with cost-per-second, durations, resolutions |
@@ -338,20 +338,40 @@ Your saved UGC characters — the recurring, named people you shoot with — wit
 | `negativeLock` | The character's negative prompt |
 | `engineParams` | Per-mode reference strengths |
 
+### Long jobs return within 45 seconds
+
+MCP clients (claude.ai, Claude Desktop, Cursor) abandon a tool call at about 60 seconds. Before 0.3.0 every long tool blocked for 6 to 15 minutes, so a 90-second image render "failed" on the client while the job finished and was charged, and the taskId died with the abandoned call.
+
+Now every tool that submits a job (`generate_image`, `edit_image`, `upscale_image`, `reframe_image`, `remove_background`, `generate_video`, `upscale_video`, `reframe_video`, `remove_background_video`, `generate_music`, `merch_mockup`, `comic_export`) polls for at most ~45 seconds and then returns:
+
+```json
+{ "state": "running", "taskId": "…", "kind": "image", "checkWith": "aetherwave_get_job", "pollEverySeconds": 10, "next": "…" }
+```
+
+Poll `aetherwave_get_job` with that `taskId` and `kind` until `done`. Two explicit escapes on each of those tools:
+
+| Arg | Effect |
+|-----|--------|
+| `async: true` | Submit and return the taskId immediately, no polling |
+| `wait: true` | The old long block (6-15 min budget). **Only if your client permits calls over 60 s** |
+
+`master_audio` has no job id (the request itself is the job): it also returns within ~45 s, and a master that outlives the call is saved to the gallery - find it with `aetherwave_list_my_creations` type `audio` rather than resubmitting.
+
 ### `aetherwave_get_job`
 
-Check a job by `taskId`. Use after an `async: true` submit — **or to recover any generation whose call timed out**, since the job keeps running server-side and saves to your gallery regardless of what happened to the client.
+Check a job by `taskId`. Use it for any `state: "running"` result, after an `async: true` submit, **or to recover any generation whose call timed out**, since the job keeps running server-side and saves to your gallery regardless of what happened to the client.
 
 | Param | Type | Required | Notes |
 |-------|------|----------|-------|
-| `taskId` | string | yes | Returned by an async submit |
-| `kind` | enum | yes | `video`, `image`, `music`, `video-edit` — picks the status endpoint |
+| `taskId` | string | yes | The taskId (or taskKey / exportId) a tool returned |
+| `kind` | enum | yes | `image` (generate, edit, upscale, reframe, remove-background), `video`, `video-edit` (upscale/reframe/remove-background video), `music`, `merch-mockup`, `comic-export` |
+| `projectId` | string | for `comic-export` | The comic project the export belongs to |
 
-**Returns:** `{ taskId, state, done, videoUrl, imageUrls, error, raw }`
+**Returns:** `{ taskId, kind, state, done, failed, videoUrl, imageUrls, tracks, mockups, downloadUrl, autoSaved, creationIds, error, next, raw }`
 
 ### `aetherwave_generate_video`
 
-T2V or I2V. Submits, polls up to 8 min, returns final URL.
+T2V or I2V. Submits, polls for up to ~45 s, and returns the URL if the render finished - otherwise `state: "running"` with the taskId (video takes 1-8 min, so that is the usual case).
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
@@ -365,12 +385,13 @@ T2V or I2V. Submits, polls up to 8 min, returns final URL.
 | `mode` | enum | no | `normal` | Grok Imagine: `fun`, `normal`, `spicy` |
 | `generateAudio` | bool | no | `false` | **Render speech/sound with the video.** Clips are SILENT without it. Free on Seedance 2.x at every resolution |
 | `referenceImages` | string[] (max 9) | no | — | Identity anchors held consistent across the clip. Mutually exclusive with `imageUrl`. https URLs are fetched and encoded for you |
-| `async` | bool | no | `false` | Return a `taskId` immediately instead of waiting. **Use this for video** — see below |
+| `async` | bool | no | `false` | Return a `taskId` immediately instead of waiting |
+| `wait` | bool | no | `false` | Block up to 8 min. Only if your client permits calls over 60 s |
 
-**Returns (sync):** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
-**Returns (async):** `{ taskId, state: "submitted", next }`
+**Returns (finished):** `{ taskId, state, videoUrl, fallbackProvider, autoSaved, creationId, kieTaskId }`
+**Returns (still rendering, or `async`):** `{ state: "running", taskId, kind: "video", checkWith, pollEverySeconds, next }`
 
-> ⚠️ **Use `async: true` for video.** A render takes 1–8 minutes and most MCP clients abandon a call at 60 seconds (`MCP error -32001`). The job itself is fine — it is submitted, billed and saved to your gallery regardless — but a synchronous call hands the client a timeout instead of a URL. Async returns the id in ~2 seconds; poll `aetherwave_get_job`.
+> A render takes 1–8 minutes and most MCP clients abandon a call at 60 seconds (`MCP error -32001`), so this tool returns `state: "running"` within ~45 s and you poll `aetherwave_get_job`. The job itself is submitted, billed and saved to your gallery regardless of what the client does.
 
 > ⚠️ **`imageUrl` and `referenceImages` are not additive.** A supplied first frame switches the engine to first-frame mode *exclusively* and drops the reference images — which silently disables the only no-drift mechanism available. Passing both is rejected with an explicit error rather than quietly honouring one.
 

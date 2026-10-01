@@ -16,7 +16,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createRequire } from "node:module";
 import { z } from "zod";
-import { AetherwaveClient } from "./api.js";
+import {
+  AetherwaveClient,
+  DEFAULT_SOFT_DEADLINE_MS,
+  DONE_STATES,
+  FAILED_STATES,
+  JOB_KINDS,
+  jobStatusPath,
+  runningResult,
+  type JobKind,
+} from "./api.js";
 import { registerComicTools } from "./comic.js";
 import { registerMerchTools } from "./merch.js";
 
@@ -76,6 +85,40 @@ function errorResult(err: unknown) {
       },
     ],
   };
+}
+
+/* EVERY LONG TOOL RETURNS WITHIN ~45 s.
+ *
+ * MCP clients abandon a tool call at about 60 s. A tool that blocks longer
+ * "fails" on the client while the job succeeds and is charged, and the taskId
+ * is lost with the abandoned call. So every tool that submits a job polls for
+ * at most DEFAULT_SOFT_DEADLINE_MS and then hands back { state: "running",
+ * taskId, kind } for aetherwave_get_job. Two escapes, both explicit:
+ *   wait:  true -> the old long block (only for clients that allow it)
+ *   async: true -> submit and return the id at once, no polling */
+const RETURNS_NOTE =
+  '\n\nReturns within ~45 s. If the result has state "running" the job is still rendering: poll aetherwave_get_job with the returned taskId and kind every ~10 s. Pass wait:true ONLY if your MCP client permits tool calls longer than 60 s (most do not). Pass async:true to get the taskId back immediately without waiting.';
+
+const waitArgs = {
+  wait: z
+    .boolean()
+    .optional()
+    .describe(
+      "Block until the job finishes (up to the tool's full budget, 6-15 minutes). ONLY if your MCP client permits tool calls longer than 60 s; most abandon the call at 60 s and lose the taskId. Default false: return within ~45 s and hand back a taskId if still running.",
+    ),
+  async: z
+    .boolean()
+    .optional()
+    .describe(
+      "Submit and return the taskId immediately without polling at all. Then poll aetherwave_get_job(taskId, kind).",
+    ),
+};
+
+/** Soft deadline for a tool call: 0 for async, the full budget for wait, else the default. */
+function softDeadlineFor(args: { wait?: boolean; async?: boolean }, fullTimeoutMs: number): number {
+  if (args.async) return 0;
+  if (args.wait) return fullTimeoutMs;
+  return DEFAULT_SOFT_DEADLINE_MS;
 }
 
 /** Cap on a single fetched reference image. Nine of these go in one request
@@ -229,41 +272,66 @@ Per character you get:
       annotations: { readOnlyHint: true, openWorldHint: true },
       title: "Check a generation job by taskId",
       description:
-        "Returns the current state and, once finished, the output URL(s) for a job submitted with async:true. Poll this every 10-20s. Use it whenever a generation call timed out too: the job keeps running server-side and is saved to the gallery regardless of what happened to the client, so a taskId is enough to recover a render you already paid for.",
+        `Returns the current state and, once finished, the output URL(s) for any job a tool handed back as state "running" (or submitted with async:true). Poll every ~10 s. Use it whenever a generation call timed out too: the job keeps running server-side and is saved to the gallery regardless of what happened to the client, so a taskId is enough to recover a render you already paid for.
+
+kind picks the pipeline, and every tool names the kind it returns:
+- "image": generate_image, edit_image, upscale_image, reframe_image, remove_background
+- "video": generate_video
+- "video-edit": upscale_video, reframe_video, remove_background_video
+- "music": generate_music
+- "merch-mockup": merch_mockup (taskId = its taskKey)
+- "comic-export": comic_export (taskId = its exportId; projectId required)
+Comic script/draw/assemble progress is per project, not per task: use aetherwave_comic_status. master_audio has no job id (the call itself is the job); a mastered track that outlived the call is in aetherwave_list_my_creations type "audio".`,
       inputSchema: {
-        taskId: z.string().describe("The taskId returned by an async submit."),
+        taskId: z.string().describe("The taskId (or taskKey / exportId) a tool returned."),
         kind: z
-          .enum(["video", "image", "music", "video-edit"])
-          .describe("Which pipeline produced the job. Picks the status endpoint."),
+          .enum(JOB_KINDS)
+          .describe("Which pipeline produced the job, exactly as the tool's result named it. Picks the status endpoint."),
+        projectId: z
+          .string()
+          .optional()
+          .describe("Comic project id. Required for kind 'comic-export' only."),
       },
     },
     async (args) => {
       try {
-        const path =
-          args.kind === "video"
-            ? `/api/generate-video/status/${encodeURIComponent(args.taskId)}`
-            : args.kind === "image"
-              ? `/api/generate-image/status/${encodeURIComponent(args.taskId)}`
-              : args.kind === "music"
-                ? `/api/music-status/${encodeURIComponent(args.taskId)}`
-                : `/api/video/edit/status/${encodeURIComponent(args.taskId)}`;
-        const status = await client.get<any>(path);
+        const kind = args.kind as JobKind;
+        const status = await client.get<any>(jobStatusPath(kind, args.taskId, args.projectId));
         const state = String(status?.state || status?.status || "unknown");
+        const lc = state.toLowerCase();
         const videoUrl =
-          status?.data?.video?.url || status?.video?.url || status?.data?.video_url || null;
+          status?.data?.video?.url ||
+          status?.video?.url ||
+          status?.data?.video_url ||
+          status?.resultUrl ||
+          null;
         const imageUrls =
           status?.data?.images?.map?.((i: any) => i?.url ?? i) ??
           status?.images?.map?.((i: any) => i?.url ?? i) ??
           null;
+        /* Music reports FIRST_SUCCESS (streamable, still rendering) before
+         * SUCCESS; only SUCCESS is done and billed. */
+        const done = DONE_STATES.includes(lc);
+        const failed = FAILED_STATES.includes(lc);
         return jsonResult({
           taskId: args.taskId,
+          kind,
           state,
-          done: ["success", "complete", "completed", "succeeded", "done"].includes(
-            state.toLowerCase(),
-          ),
+          done,
+          failed,
           videoUrl,
           imageUrls,
+          tracks: kind === "music" ? status?.tracks ?? [] : undefined,
+          mockups: kind === "merch-mockup" ? status?.mockups ?? [] : undefined,
+          downloadUrl: kind === "comic-export" ? status?.url ?? null : undefined,
+          autoSaved: status?.autoSaved ?? null,
+          creationIds: status?.creationIds ?? (status?.creationId ? [status.creationId] : undefined),
           error: status?.error ?? null,
+          next: done
+            ? undefined
+            : failed
+              ? "The job failed; see error. A failed job is refunded server-side."
+              : "Still running. Poll again in ~10 s.",
           raw: status,
         });
       } catch (err) {
@@ -370,14 +438,14 @@ Default: \`grok-imagine-t2i\` (5 cr, 6 outputs per call, fast, general purpose).
 Pick a different model when the prompt has these signals:
 
 - "single best result" / "one image" / production / no time to pick from variations -> \`gpt-image-2-t2i\` (9 cr, 1 output, top general quality)
-- "photoreal" / "photo of" / "realistic"     -> \`gpt-image-2-t2i\` (9 cr, best general realism) or \`imagen-4\` (12 cr, very high quality) or \`z-image-turbo\` (3 cr, fastest)
+- "photoreal" / "photo of" / "realistic"     -> \`gpt-image-2-t2i\` (9 cr, best general realism) or \`imagen-4\` (12 cr, very high quality) or \`z-image-turbo\` (2 cr, fastest)
 - "highest quality" / "premium" / no budget  -> \`gpt-image-2-t2i\` at 2K, or \`grok-imagine-quality-t2i\` (16 cr @ 1K, 22 cr @ 2K), or \`imagen-4-ultra\`
 - Text inside the image (signs, posters, typography) -> \`ideogram-v3-t2i\` (best in class) or \`gpt-image-2-t2i\` (also strong)
 - Artistic / painterly / stylized            -> \`midjourney-t2i\`
 - Album art / cover art                      -> \`gpt-image-2-t2i\` for one strong image; \`grok-imagine-t2i\` for 6 variations to choose from; \`seedream-v4-t2i\` if 4K wanted
 - Logo or design with embedded text          -> \`ideogram-v3-t2i\`
 - NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
-- Cheapest possible / quick test             -> \`z-image-turbo\` (3 cr)
+- Cheapest possible / quick test             -> \`z-image-turbo\` (2 cr)
 - Multiple variations to compare             -> keep \`grok-imagine-t2i\` (6 outputs default) or use \`numImages\` on a multi-output model
 
 For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer (\`midjourney-i2i\`), premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
@@ -387,7 +455,7 @@ Always pass an explicit \`aspectRatio\` (e.g. "1:1" for square album art, "16:9"
 Ask the user only when:
 - The prompt contradicts itself (e.g., "highest quality but cheapest")
 - The user requested "the best model" with no context, surface 2-3 options with tradeoffs
-- A single generation would cost more than 20 credits and the user has not confirmed`,
+- A single generation would cost more than 20 credits and the user has not confirmed` + RETURNS_NOTE,
       inputSchema: {
         prompt: z.string().describe("Text description of the image to generate."),
         model: z
@@ -441,11 +509,12 @@ Ask the user only when:
           .int()
           .optional()
           .describe("Seed for deterministic generation (supported by some models)."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-image",
           submitBody: {
             prompt: args.prompt,
@@ -459,9 +528,13 @@ Ask the user only when:
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 6 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           state: status.state || status.status,
@@ -482,11 +555,11 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Edit image with AI (I2I)",
       description:
-        `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (6 cr per call, returns 2 variations, ~30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
+        `Edits an existing image guided by a text prompt. Pass a public \`imageUrl\` plus a \`prompt\` describing the change ("add a moon to the sky", "swap the background for a neon city", "make it look like a comic panel"). Submits, polls, and returns the edited image URL(s). Default model is 'grok-imagine-i2i' (6 cr, one image, ~15-30s, best cost-to-quality on standard edits). Other I2I-capable models: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i' (slow, ~5min). Use list_image_models for full lineup. Note: source URLs with spaces or parentheses may fail upstream; prefer clean URLs.
 
 ## Model selection guide for edits
 
-Default: \`grok-imagine-i2i\` (6 cr per call, returns 2 variations = 3 cr/image effective, fast ~30s, strong general-purpose edit quality).
+Default: \`grok-imagine-i2i\` (6 cr, one image, fast ~15-30s, strong general-purpose edit quality).
 
 Pick a different model when:
 
@@ -496,7 +569,7 @@ Pick a different model when:
 - Highest quality, time is not a concern (~5 min OK)            -> \`gpt-image-1.5-i2i\` or \`grok-imagine-quality-i2i\` (16 cr @ 1K, 22 cr @ 2K)
 - Stylized / artistic transformation                            -> \`midjourney-i2i\`
 
-If the user simply says "edit this image" with no other signal, default to \`grok-imagine-i2i\`.`,
+If the user simply says "edit this image" with no other signal, default to \`grok-imagine-i2i\`.` + RETURNS_NOTE,
       inputSchema: {
         prompt: z.string().describe("Text description of the edit (e.g. 'replace the sky with sunset clouds')."),
         imageUrl: z
@@ -507,7 +580,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .string()
           .optional()
           .describe(
-            "Model ID. Defaults to 'grok-imagine-i2i' (3 cr/image effective, 2 outputs). Other options: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i', 'grok-imagine-quality-i2i'. Use list_image_models for the full list.",
+            "Model ID. Defaults to 'grok-imagine-i2i' (6 cr, one image). Other options: 'seedream-v4-edit', 'wan-2.5-spicy-i2i', 'flux-kontext-pro', 'qwen-image-edit', 'gpt-image-1.5-i2i', 'grok-imagine-quality-i2i'. Use list_image_models for the full list.",
           ),
         aspectRatio: z
           .string()
@@ -536,11 +609,12 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .string()
           .optional()
           .describe("What to avoid in the output (supported by some models)."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/edit-image",
           submitBody: {
             prompt: args.prompt,
@@ -555,9 +629,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 10 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 10 * 60_000),
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           state: status.state || status.status,
@@ -578,7 +656,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Upscale image (Topaz)",
       description:
-        "Upscales a source image using Topaz's high-fidelity upscaler. Pass a public `imageUrl` and an `upscaleFactor`. Credit cost depends on the source resolution × factor; small images cost less than large ones at the same factor. Returns the upscaled image URL.",
+        "Upscales a source image using Topaz's high-fidelity upscaler. Pass a public `imageUrl` and an `upscaleFactor`. Credit cost depends on the source resolution × factor; small images cost less than large ones at the same factor. Returns the upscaled image URL." + RETURNS_NOTE,
       inputSchema: {
         imageUrl: z
           .string()
@@ -588,11 +666,12 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .enum(["1x", "2x", "4x", "8x"])
           .optional()
           .describe("Upscale multiplier. Defaults to '2x'. '8x' is heavy; use only on small sources."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/upscale-image",
           submitBody: {
             imageUrl: args.imageUrl,
@@ -600,9 +679,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 6 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           state: status.state || status.status,
@@ -623,26 +706,31 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Remove background from image (Recraft + fal.ai BiRefNet v2 fallback)",
       description:
-        "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image. Recraft is the primary provider; on outage the tool auto-falls back to fal.ai BiRefNet v2 so single-image calls never silently fail. Works best on photographic subjects (people, products, animals); transparent-PNG inputs have no foreground to segment.",
+        "Strips the background from an image, returning a PNG with transparent alpha. Pass a public `imageUrl`. Useful for product shots, character cutouts, logo isolation, or compositing onto a new background. ~5 credits per image. Recraft is the primary provider; on outage the tool auto-falls back to fal.ai BiRefNet v2 so single-image calls never silently fail. Works best on photographic subjects (people, products, animals); transparent-PNG inputs have no foreground to segment." + RETURNS_NOTE,
       inputSchema: {
         imageUrl: z
           .string()
           .url()
           .describe("Public URL of the source image."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/remove-background",
           submitBody: {
             imageUrl: args.imageUrl,
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 6 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           state: status.state || status.status,
@@ -661,7 +749,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Reframe image to a new aspect ratio (Ideogram V3 Reframe)",
       description:
-        "Reframes an image to a new aspect ratio by intelligently outpainting the edges. Pass a public `imageUrl` and the target `aspectRatio` ('16:9', '9:16', '1:1', '4:3', '3:4', etc.). Three speed tiers: 'turbo' (5 cr, fast), 'balanced' (10 cr, default), 'quality' (14 cr, slowest, best edges). Returns the reframed image URL.",
+        "Reframes an image to a new aspect ratio by intelligently outpainting the edges. Pass a public `imageUrl` and the target `aspectRatio` ('16:9', '9:16', '1:1', '4:3', '3:4', etc.). Three speed tiers: 'turbo' (5 cr, fast), 'balanced' (10 cr, default), 'quality' (14 cr, slowest, best edges). Returns the reframed image URL." + RETURNS_NOTE,
       inputSchema: {
         imageUrl: z
           .string()
@@ -674,6 +762,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .enum(["turbo", "balanced", "quality"])
           .optional()
           .describe("Rendering speed. 'turbo'=5cr, 'balanced'=10cr (default), 'quality'=14cr."),
+        ...waitArgs,
       },
     },
     async (args) => {
@@ -689,7 +778,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           "3:4": "portrait_4_3",
         };
         const imageSize = presetMap[args.aspectRatio] || args.aspectRatio;
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/reframe-image",
           submitBody: {
             imageUrl: args.imageUrl,
@@ -698,9 +787,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 6 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
           pollIntervalMs: 2_500,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           state: status.state || status.status,
@@ -721,7 +814,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Upscale video (Atlas Video Upscaler)",
       description:
-        "Upscales a source video to 1080p or 2K using Atlas. Pass a public `videoUrl` and the target resolution. Cost is per-second (7 cr/s @ 1080p, 9 cr/s @ 2K). Atlas-side limits: clips up to 53s at 1080p, 23s at 2K, source must be <=30fps. Returns the upscaled video URL (R2-hosted).",
+        "Upscales a source video to 1080p or 2K using Atlas. Pass a public `videoUrl` and the target resolution. Cost is per-second (7 cr/s @ 1080p, 9 cr/s @ 2K). Atlas-side limits: clips up to 53s at 1080p, 23s at 2K, source must be <=30fps. Returns the upscaled video URL (R2-hosted)." + RETURNS_NOTE,
       inputSchema: {
         videoUrl: z
           .string()
@@ -731,11 +824,12 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .enum(["1080p", "2k"])
           .optional()
           .describe("Target output resolution. Defaults to '1080p'. '2k' is more expensive and limited to ~23s clips."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/video/edit",
           submitBody: {
             tool: "upscale",
@@ -744,9 +838,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/video/edit/status/${id}`,
           timeoutMs: 10 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 10 * 60_000),
           pollIntervalMs: 3_000,
           successStates: ["completed", "success", "complete", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "video-edit", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           status: status.status,
@@ -767,7 +865,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Remove background from video",
       description:
-        "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. 2 credits per second. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted).",
+        "Strips the background from a video frame-by-frame using rembg (u2netp) on AetherWave's Python service. Pass a public `videoUrl`. Choose `bgType: \"transparent\"` for an alpha-channel WebM output (compositing) or `bgType: \"color\"` with a `customColor` hex for a solid replacement. 2 credits per second. Slowest tool in the surface (per-frame processing); a 6s clip takes ~4 min, a 30s clip ~15-20 min. Works best on subjects with clear edges (people, products). Returns the processed video URL (R2-hosted)." + RETURNS_NOTE,
       inputSchema: {
         videoUrl: z
           .string()
@@ -781,11 +879,12 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .string()
           .optional()
           .describe("Hex color for solid background when bgType='color' (e.g. '#00ff00'). Default green."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/video/edit",
           submitBody: {
             tool: "background",
@@ -795,9 +894,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/video/edit/status/${id}`,
           timeoutMs: 15 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 15 * 60_000),
           pollIntervalMs: 3_000,
           successStates: ["completed", "success", "complete", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "video-edit", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           status: status.status,
@@ -818,7 +921,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Reframe video to a new aspect ratio (Luma Ray 2 Flash)",
       description:
-        "Reframes a video to a new aspect ratio by intelligently outpainting/cropping the edges. Pass a public `videoUrl` and target `reframeAspectRatio`. 17 credits per second. Optional `reframePrompt` lets you steer the new edge content (e.g. 'extend the sky with sunset clouds'). Returns the reframed video URL (R2-hosted).",
+        "Reframes a video to a new aspect ratio by intelligently outpainting/cropping the edges. Pass a public `videoUrl` and target `reframeAspectRatio`. 17 credits per second. Optional `reframePrompt` lets you steer the new edge content (e.g. 'extend the sky with sunset clouds'). Returns the reframed video URL (R2-hosted)." + RETURNS_NOTE,
       inputSchema: {
         videoUrl: z
           .string()
@@ -831,11 +934,12 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .string()
           .optional()
           .describe("Optional prompt to steer the new edge content."),
+        ...waitArgs,
       },
     },
     async (args) => {
       try {
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/video/edit",
           submitBody: {
             tool: "reframe",
@@ -845,9 +949,13 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           },
           statusPath: (id) => `/api/video/edit/status/${id}`,
           timeoutMs: 15 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 15 * 60_000),
           pollIntervalMs: 3_000,
           successStates: ["completed", "success", "complete", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "video-edit", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           status: status.status,
@@ -868,7 +976,7 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate video (Grok Imagine, Wan 2.7, Hailuo 02, Seedance, Kling 2.6, VEO 3.1, Happy Horse)",
       description:
-        `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation can take 30s to several minutes; this tool polls with up to an 8-minute budget.
+        `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation takes 1-8 minutes, so this tool almost always returns state "running" with a taskId: poll aetherwave_get_job with kind "video".
 
 ## Model selection guide for videos (when the user does not specify a model)
 
@@ -909,7 +1017,7 @@ Pass \`generateAudio: true\` for any clip with dialogue, and spell hard words th
 
 Ask the user only when:
 - Single generation would cost more than 100 credits and they haven't confirmed
-- They asked for "the best" with no other signal; surface 2-3 options with cost ranges`,
+- They asked for "the best" with no other signal; surface 2-3 options with cost ranges` + RETURNS_NOTE,
       inputSchema: {
         prompt: z.string().describe("Text description of the video scene."),
         model: z
@@ -955,12 +1063,6 @@ Ask the user only when:
           .describe(
             "Render native speech and sound WITH the video. Off by default, so a clip is SILENT unless you pass true. Free on Seedance 2.x at every resolution (measured: the sounded and silent runs bill identically) and included at base cost on Grok Imagine and VEO 3.x; Kling 2.6/3.0 surcharge for it. Pass true whenever the prompt contains dialogue - a talking head with no audio is not what the caller asked for.",
           ),
-        async: z
-          .boolean()
-          .optional()
-          .describe(
-            "Submit and return a taskId IMMEDIATELY instead of waiting for the render. Video takes 1-8 minutes and most MCP clients abandon a call at 60s, so a synchronous video call usually fails from the client side even though the render succeeds. Pass true, then poll aetherwave_get_job(taskId). Strongly recommended for video.",
-          ),
         referenceImages: z
           .array(z.string().url())
           .max(9)
@@ -968,6 +1070,7 @@ Ask the user only when:
           .describe(
             "Up to 9 image URLs used as identity anchors held consistent ACROSS the whole clip. THIS is the parameter for a consistent character - pass the character's referenceImages from aetherwave_list_characters. Mutually exclusive with imageUrl: a supplied first frame switches the engine to first-frame mode and DROPS these, disabling the only no-drift mechanism there is. Platform https URLs are fetched and encoded for you.",
           ),
+        ...waitArgs,
       },
     },
     async (args) => {
@@ -995,39 +1098,7 @@ Ask the user only when:
           ? await Promise.all(args.referenceImages.map((u) => toDataUrl(u)))
           : undefined;
 
-        /* A synchronous video call cannot survive a default MCP client: the
-         * render takes 1-8 minutes and the client gives up at 60s
-         * (observed: MCP error -32001, data.timeout 60000). The job itself is
-         * fine - it is already submitted, billed and saved server-side - but
-         * the caller sees a timeout and has no taskId to recover with. Async
-         * hands the id back before any of that can happen. */
-        if (args.async) {
-          const submitted = await client.post<any>("/api/generate-video", {
-            prompt: args.prompt,
-            model: args.model || "grok-imagine-t2v",
-            duration: args.duration,
-            resolution: args.resolution,
-            aspectRatio: args.aspectRatio,
-            imageUrl: args.imageUrl,
-            endImageUrl: args.endImageUrl,
-            mode: args.mode,
-            generateAudio: args.generateAudio,
-            additionalImages,
-          });
-          const id = submitted?.taskId || submitted?.task_id || submitted?.id;
-          if (!id) {
-            throw new Error(
-              `Submit did not return a taskId. Response: ${JSON.stringify(submitted).slice(0, 300)}`,
-            );
-          }
-          return jsonResult({
-            taskId: id,
-            state: "submitted",
-            next: `Poll aetherwave_get_job with taskId "${id}" and kind "video". Video usually takes 1-8 minutes.`,
-          });
-        }
-
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-video",
           submitBody: {
             prompt: args.prompt,
@@ -1043,9 +1114,13 @@ Ask the user only when:
           },
           statusPath: (id) => `/api/generate-video/status/${id}`,
           timeoutMs: 8 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 8 * 60_000),
           pollIntervalMs: 3_000,
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "video", { lastState: status?.state || status?.status || null }));
+        }
         const videoUrl =
           status?.data?.video?.url ||
           status?.video?.url ||
@@ -1073,7 +1148,7 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate music (Suno)",
       description:
-        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. Note: the `title` param is advisory for instrumentals - Suno often writes its own title from the prompt content for instrumental generations. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version.",
+        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. Note: the `title` param is advisory for instrumentals - Suno often writes its own title from the prompt content for instrumental generations. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version." + RETURNS_NOTE,
       inputSchema: {
         prompt: z
           .string()
@@ -1139,6 +1214,7 @@ Ask the user only when:
           .describe(
             "Comma-separated things to AVOID, e.g. 'heavy metal, screaming, distorted guitar'. Use when someone says they do not want a particular sound. Only applies with lyrics.",
           ),
+        ...waitArgs,
       },
     },
     async (args) => {
@@ -1188,14 +1264,18 @@ Ask the user only when:
               model: args.model || "V5_5",
             };
 
-        const { status, taskId } = await client.submitAndPoll<any>({
+        const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-music",
           submitBody,
           statusPath: (id) => `/api/music-status/${id}`,
           timeoutMs: 6 * 60_000,
+          softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
           pollIntervalMs: 4_000,
           successStates: ["complete", "success", "completed", "succeeded", "done"],
         });
+        if (running) {
+          return jsonResult(runningResult(taskId, "music", { lastState: status?.state || status?.status || null }));
+        }
         return jsonResult({
           taskId,
           status: status.status || status.state,
@@ -1214,8 +1294,9 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Master an audio track (AI mastering)",
       description:
-        "Submits an audio file for AI mastering and returns the mastered URL synchronously (route polls the Python service internally; expect 30s-5min). Useful as a final polish step after music generation. Cost: 20 credits per track. Producer, Mogul, and Ultimate plans get mastering free. Output is WAV (~50MB per 3-minute track, lossless for redistribution). Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.",
+        "Submits an audio file for AI mastering and returns the mastered URL (the route polls the Python service internally; a typical track takes 30-90 s, a long one up to 5 min). Useful as a final polish step after music generation. Cost: 20 credits per track. Producer, Mogul, and Ultimate plans get mastering free. Output is WAV (~50MB per 3-minute track, lossless for redistribution). Pick a `preset` to steer the mastering style; call `aetherwave_list_master_presets` for the full live list (12 presets including streaming, loud, gentle, hip_hop, edm, pop, rock, lofi, rnb, acoustic, cinematic, podcast). Each preset has a target LUFS value so you can match the distribution target.\n\nReturns within ~45 s. This pipeline has NO job id (the request itself is the job), so if the result has state \"running\" the master is still finishing server-side and will be saved to the gallery: find it with aetherwave_list_my_creations type \"audio\" (newest first) rather than resubmitting, which would master and charge it again. Pass wait:true ONLY if your MCP client permits tool calls longer than 60 s.",
       inputSchema: {
+        wait: waitArgs.wait,
         audioUrl: z
           .string()
           .url()
@@ -1233,11 +1314,35 @@ Ask the user only when:
     },
     async (args) => {
       try {
-        const data = await client.post<any>("/api/master-audio", {
-          audioUrl: args.audioUrl,
-          preset: args.preset,
-          trackTitle: args.trackTitle,
-        });
+        /* /api/master-audio is SYNCHRONOUS: it returns no taskId and has no
+         * status route (verified server/routes.ts, 2026-09-30), so the only
+         * soft deadline possible here is on the request itself. Aborting our
+         * wait does not stop the server: the master finishes, is charged, and
+         * lands in the gallery. Say that, and say where to find it, rather
+         * than reporting a failure that would invite a second (charged) run. */
+        let data: any;
+        try {
+          data = (
+            await client.request<any>(
+              "POST",
+              "/api/master-audio",
+              { audioUrl: args.audioUrl, preset: args.preset, trackTitle: args.trackTitle },
+              { timeoutMs: args.wait ? 6 * 60_000 : DEFAULT_SOFT_DEADLINE_MS },
+            )
+          ).data;
+        } catch (err: any) {
+          if (err?.timedOut) {
+            return jsonResult({
+              state: "running",
+              taskId: null,
+              kind: "master",
+              checkWith: "aetherwave_list_my_creations",
+              pollEverySeconds: 15,
+              next: `Mastering is still finishing server-side; it is charged once and saved to the gallery when done. Do NOT resubmit. Call aetherwave_list_my_creations with type "audio" (limit 5) in ~15 s and look for the newest item${args.trackTitle ? ` titled "${args.trackTitle}"` : ""}.`,
+            });
+          }
+          throw err;
+        }
         return jsonResult({
           success: data.success,
           masteredUrl: data.masteredUrl,

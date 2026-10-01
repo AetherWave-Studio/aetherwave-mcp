@@ -29,6 +29,9 @@ const CLIENT_VERSION: string = (() => {
 })();
 const CLIENT_UA = `@aetherwave-studio/mcp/${CLIENT_VERSION}`;
 
+/** Default soft deadline: comfortably inside the ~60 s most MCP clients allow. */
+export const DEFAULT_SOFT_DEADLINE_MS = 45_000;
+
 export interface ApiClientOptions {
   /** aw_live_ API key -> sent as X-AW-Key. */
   apiKey?: string;
@@ -213,14 +216,33 @@ export class AetherwaveClient {
   }
 
   /**
-   * Submit a generation, poll its status endpoint until terminal, return the
-   * final status payload. Used by every generate_* tool so the LLM gets a
-   * single round-trip instead of having to write its own polling loop.
+   * Submit a generation, poll its status endpoint, return the final status
+   * payload - OR, if the job is still running at the SOFT deadline, return
+   * `running: true` with the taskId so the caller can come back for it.
+   *
+   * WHY THE SOFT DEADLINE EXISTS. MCP clients (claude.ai, Claude Desktop,
+   * Cursor) abandon a tool call at about 60 s (MCP error -32001, timeout
+   * 60000). Every long tool used to block for 6 to 15 minutes, so a 90 s
+   * image render "failed" on the client side while the job finished and was
+   * charged - and the taskId, the one thing that could recover the result,
+   * died with the abandoned call. Reported by the social-media agent
+   * 2026-09-30: "the image tool times out at 60 s, but Sunburst renders in
+   * 20-90 s". Returning BEFORE the client gives up hands the id back.
+   *
+   * Three modes, all through this one code path:
+   *   softDeadlineMs = 45_000 (default) -> poll up to ~45 s, then return running
+   *   softDeadlineMs = 0                -> submit only (a tool's `async: true`)
+   *   softDeadlineMs >= timeoutMs       -> the old long block (a tool's `wait: true`)
+   *
+   * The soft deadline counts from BEFORE the submit POST, so a slow submit
+   * does not push the whole call past the client's limit.
    *
    * @param submitPath endpoint that returns { taskId, ... }
    * @param submitBody body to POST
    * @param statusPath function that builds the status URL from a taskId
-   * @param opts.timeoutMs how long to wait for terminal state (default 6m)
+   * @param opts.timeoutMs hard budget for terminal state (default 6m); only
+   *   reachable when softDeadlineMs is raised to meet it
+   * @param opts.softDeadlineMs return `running` after this long (default 45s)
    * @param opts.pollIntervalMs interval between polls (default 3s)
    * @param opts.successStates lowercased terminal-success values to watch for
    * @param opts.failureStates lowercased terminal-failure values to watch for
@@ -230,20 +252,23 @@ export class AetherwaveClient {
     submitBody: unknown;
     statusPath: (taskId: string) => string;
     timeoutMs?: number;
+    softDeadlineMs?: number;
     pollIntervalMs?: number;
     successStates?: string[];
     failureStates?: string[];
-  }): Promise<{ taskId: string; status: TStatus }> {
+  }): Promise<{ taskId: string; status: TStatus; running: boolean }> {
     const {
       submitPath,
       submitBody,
       statusPath,
       timeoutMs = 360_000,
+      softDeadlineMs = DEFAULT_SOFT_DEADLINE_MS,
       pollIntervalMs = 3_000,
       successStates = ["success", "complete", "completed", "succeeded", "done"],
       failureStates = ["failed", "failure", "error", "rejected", "cancelled"],
     } = opts;
 
+    const startedAt = Date.now();
     const submitResp = await this.post<any>(submitPath, submitBody);
     const taskId: string | undefined =
       submitResp?.taskId || submitResp?.task_id || submitResp?.id;
@@ -255,7 +280,13 @@ export class AetherwaveClient {
       );
     }
 
-    const deadline = Date.now() + timeoutMs;
+    /* `async: true` -> hand the id straight back, no poll at all. */
+    if (softDeadlineMs <= 0) {
+      return { taskId, status: null as unknown as TStatus, running: true };
+    }
+
+    const deadline = startedAt + timeoutMs;
+    const softDeadline = startedAt + Math.min(softDeadlineMs, timeoutMs);
     const successSet = new Set(successStates.map((s) => s.toLowerCase()));
     const failureSet = new Set(failureStates.map((s) => s.toLowerCase()));
 
@@ -263,9 +294,17 @@ export class AetherwaveClient {
      * At the 3s default poll interval this is ~2 minutes of upstream trouble. */
     const MAX_CONSECUTIVE_TRANSIENT = 40;
     let consecutiveTransient = 0;
+    let lastStatus: any = null;
+    let failureSeen = false;
 
     while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
+      /* Never start a sleep that would land past the soft deadline: a 45 s
+       * deadline with a 4 s poll must return at ~45 s, not ~49 s. */
+      const remaining = softDeadline - Date.now();
+      if (remaining <= 0) {
+        return { taskId, status: lastStatus as TStatus, running: true };
+      }
+      await new Promise((r) => setTimeout(r, Math.min(pollIntervalMs, remaining)));
       let status: any;
       try {
         status = await this.get<any>(statusPath(taskId));
@@ -300,15 +339,30 @@ export class AetherwaveClient {
         throw err;
       }
       consecutiveTransient = 0;
+      lastStatus = status;
       const state = String(status?.state || status?.status || "").toLowerCase();
-      if (successSet.has(state)) return { taskId, status };
+      if (successSet.has(state)) return { taskId, status, running: false };
       if (failureSet.has(state)) {
+        /* A FAILED MUST BE SEEN TWICE BEFORE IT IS BELIEVED.
+         *
+         * On the 2026-09-30 audit /api/reframe-image reported FAILED for one
+         * poll (its KIE queue status leaks straight into the task state), then
+         * fell back to fal, went back to PROCESSING, and finished SUCCESS with
+         * the 5 credits charged. This tool had already told the caller the job
+         * failed. One extra poll interval on a real failure is cheap; a false
+         * failure on a paid, successful job is the bug this file exists to
+         * prevent. */
+        if (!failureSeen) {
+          failureSeen = true;
+          continue;
+        }
         const errorMsg =
           status?.error || status?.message || `state=${status?.state || state}`;
         throw new Error(
           `AetherWave generation failed (taskId=${taskId}): ${errorMsg}`,
         );
       }
+      failureSeen = false;
     }
     throw new Error(
       `AetherWave generation timed out after ${Math.round(
@@ -316,4 +370,73 @@ export class AetherwaveClient {
       )}s (taskId=${taskId}). The job may still complete server-side; check the AetherWave gallery.`,
     );
   }
+}
+
+
+/** Every pipeline aetherwave_get_job can read a status from. */
+export const JOB_KINDS = [
+  "image",
+  "video",
+  "video-edit",
+  "music",
+  "merch-mockup",
+  "comic-export",
+] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+
+/**
+ * The status URL for a job of a given kind. One table, used by every tool's
+ * poller AND by aetherwave_get_job, so a taskId returned by any tool can be
+ * recovered with the same kind string the tool named.
+ *
+ * Verified against the platform repo (origin/main, 2026-09-30):
+ *   image        GET /api/generate-image/status/:taskId   server/image-routes.ts
+ *                (shared by generate, edit, upscale, reframe, remove-background)
+ *   video        GET /api/generate-video/status/:taskId   server/video-routes.ts
+ *   video-edit   GET /api/video/edit/status/:taskId       server/video-routes.ts
+ *                (upscale-video, reframe-video, remove-background-video)
+ *   music        GET /api/music-status/:taskId            server/routes.ts
+ *   merch-mockup GET /api/merch/mockup/:taskKey           server/merch-admin-routes.ts
+ *   comic-export GET /api/graphic-novel/:projectId/export/jobs/:exportId
+ *                                                         server/graphic-novel-routes.ts
+ * master_audio has NO status route: POST /api/master-audio blocks until done.
+ */
+export function jobStatusPath(kind: JobKind, taskId: string, projectId?: string): string {
+  const id = encodeURIComponent(taskId);
+  switch (kind) {
+    case "image":
+      return `/api/generate-image/status/${id}`;
+    case "video":
+      return `/api/generate-video/status/${id}`;
+    case "video-edit":
+      return `/api/video/edit/status/${id}`;
+    case "music":
+      return `/api/music-status/${id}`;
+    case "merch-mockup":
+      return `/api/merch/mockup/${id}`;
+    case "comic-export":
+      if (!projectId) throw new Error("kind 'comic-export' needs projectId as well as the exportId");
+      return `/api/graphic-novel/${encodeURIComponent(projectId)}/export/jobs/${id}`;
+  }
+}
+
+/** Terminal-success values seen across the six status routes (lowercased). */
+export const DONE_STATES = ["success", "complete", "completed", "succeeded", "done"];
+/** Terminal-failure values (lowercased). "timeout" is music-status's own verdict. */
+export const FAILED_STATES = ["failed", "failure", "error", "rejected", "cancelled", "timeout"];
+
+/**
+ * The payload every long tool returns when it hands a job back unfinished.
+ * Same shape everywhere so the model learns it once.
+ */
+export function runningResult(taskId: string, kind: JobKind, extra: Record<string, unknown> = {}) {
+  return {
+    state: "running",
+    taskId,
+    kind,
+    checkWith: "aetherwave_get_job",
+    pollEverySeconds: 10,
+    next: `Still rendering server-side (already submitted and billed; the result lands in the gallery either way). Poll aetherwave_get_job with taskId "${taskId}" and kind "${kind}" every ~10 s until state is done.`,
+    ...extra,
+  };
 }

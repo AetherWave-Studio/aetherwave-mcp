@@ -16,7 +16,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AetherwaveClient } from "./api.js";
+import { DEFAULT_SOFT_DEADLINE_MS, type AetherwaveClient } from "./api.js";
 
 /* ─── Contract constants (read from the platform, 2026-09-25) ─────────────── */
 
@@ -65,10 +65,11 @@ type PanelState = "pending" | "generating" | "complete" | "error";
 /** Hosts whose images are permanent AetherWave storage (R2). */
 const PERMANENT_IMAGE_HOSTS = ["media.aetherwavestudio.com"];
 
-/* Short deadlines: MCP clients commonly give a tool call ~60 s. */
-const REFERENCE_TIMEOUT_MS = 50_000;
-const REDRAW_TIMEOUT_MS = 50_000;
-const EXPORT_WAIT_MS = 40_000;
+/* Short deadlines: MCP clients commonly give a tool call ~60 s, so every
+ * wait here is the shared 45 s soft deadline, counted from the tool's start. */
+const REFERENCE_TIMEOUT_MS = DEFAULT_SOFT_DEADLINE_MS;
+const REDRAW_TIMEOUT_MS = DEFAULT_SOFT_DEADLINE_MS;
+const EXPORT_WAIT_MS = DEFAULT_SOFT_DEADLINE_MS;
 
 /* ─── Pure helpers (exported for tests) ───────────────────────────────────── */
 
@@ -784,7 +785,7 @@ Identify the character by characterId (from aetherwave_comic_create or aetherwav
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       title: "Export a finished comic as a download link",
       description:
-        "Free. Builds the assembled book as 'pdf', 'epub' (fixed-layout, Kindle ready), 'cbz' (comic readers) or 'bundle' (a ZIP of all three plus page PNGs), and returns a download URL that lasts about a day. Files are large (a 12-page PDF measured 130 MB). The build usually finishes within this call; if not, it returns an exportId, and calling again with that exportId returns the link. One export builds per account at a time: if one is already building, this reports that one (alreadyExporting, with its projectId) instead of starting a second. When the service is busy it refuses with retryAfterSeconds. Assemble first.",
+        "Free. Builds the assembled book as 'pdf', 'epub' (fixed-layout, Kindle ready), 'cbz' (comic readers) or 'bundle' (a ZIP of all three plus page PNGs), and returns a download URL that lasts about a day. Files are large (a 12-page PDF measured 130 MB). Returns within ~45 s: the build usually finishes inside that; if not, it returns status 'building' with an exportId, and calling again with that exportId (or aetherwave_get_job with kind 'comic-export', the exportId as taskId, and projectId) returns the link. One export builds per account at a time: if one is already building, this reports that one (alreadyExporting, with its projectId) instead of starting a second. When the service is busy it refuses with retryAfterSeconds. Assemble first.",
       inputSchema: {
         projectId: z.string().min(1),
         format: z.enum(["pdf", "epub", "cbz", "bundle"]).optional().describe("Default 'pdf'."),
@@ -793,6 +794,7 @@ Identify the character by characterId (from aetherwave_comic_create or aetherwav
       },
     },
     async (args) => {
+      const t0 = Date.now();
       const id = enc(args.projectId);
       const jobPath = (exportId: string) => `/api/graphic-novel/${id}/export/jobs/${enc(exportId)}`;
       const view = async (job: any) => ({
@@ -856,13 +858,15 @@ Identify the character by characterId (from aetherwave_comic_create or aetherwav
         if (!started?.exportId) {
           return refuse("The export did not start.", { response: started });
         }
-        const deadline = Date.now() + EXPORT_WAIT_MS;
+        // From the tool's START, not from after the submit: submit + poll
+        // together must stay inside the client's ~60 s.
+        const deadline = t0 + EXPORT_WAIT_MS;
         // A 409 names the job already building for this account, possibly for
         // another book, so poll the path the server gave rather than rebuilding it.
         const pollPath: string = started.statusPath || jobPath(started.exportId);
         let job: any = { ...started, exportId: started.exportId, status: "building" };
         while (Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) => setTimeout(r, Math.max(0, Math.min(3000, deadline - Date.now()))));
           job = await client.get<any>(pollPath);
           if (job.status !== "building") break;
         }
