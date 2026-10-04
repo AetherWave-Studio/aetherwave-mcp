@@ -14,7 +14,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 const BUDGET = Number(opt("--budget", 300));
-const OUT = opt("--out", "docs/audit-2026-09-30.json");
+const OUT = opt("--out", `docs/audit-${new Date().toISOString().slice(0, 10)}.json`);
 const ONLY = opt("--only", "") ? new Set(opt("--only", "").split(",")) : null;
 let prior = {}; try { for (const r of JSON.parse(readFileSync(OUT, "utf8")).rows) prior[r.tool] = prior[r.tool] || r; } catch {}
 const BASE = process.env.AETHERWAVE_BASE_URL || "https://aetherwavestudio.com";
@@ -41,10 +41,20 @@ await mcp.connect(transport);
 const { tools } = await mcp.listTools();
 console.log(`registered tools: ${tools.length}`);
 
+// Retries: a deploy restart serves an HTML error page for a minute or two, and
+// one bad read here used to crash the whole run before any tool was called.
 const balance = async () => {
-  const r = await fetch(`${BASE}/api/quickstart/balance`, { headers: { "X-AW-Key": API_KEY } });
-  const j = await r.json();
-  return typeof j.credits === "number" ? j.credits : NaN;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const r = await fetch(`${BASE}/api/quickstart/balance`, { headers: { "X-AW-Key": API_KEY } });
+      const j = await r.json();
+      return typeof j.credits === "number" ? j.credits : NaN;
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      console.log(`balance read failed (${err.message.slice(0, 60)}), retry ${attempt}/4 in 30 s`);
+      await new Promise((res) => setTimeout(res, 30_000));
+    }
+  }
 };
 const startBalance = await balance();
 let spent = 0;
@@ -95,7 +105,11 @@ async function audit(name, args, { est = 0, check = null, followKind = null, fol
   try { r = await call(name, args); } catch (e) { row.result = `fail (transport: ${e.message})`; log(name, "->", row.result); return row; }
   row.ms = r.ms;
   row.response = typeof r.body === "object" ? JSON.stringify(r.body).slice(0, 700) : String(r.body).slice(0, 700);
-  if (r.isError) {
+  // A deliberate refusal (refuse() in src/comic.ts) is isError + { refused: true }.
+  // When the row's contract check expects that refusal, it is the pass path.
+  if (r.isError && r.body?.refused && check && !check(r.body)) {
+    row.result = `pass (refused as designed: ${String(r.body.message).slice(0, 120)})`;
+  } else if (r.isError) {
     row.result = `fail (${String(typeof r.body === "object" ? r.body.message || JSON.stringify(r.body) : r.body).slice(0, 200)})`;
   } else if (r.body?.state === "running" && followKind) {
     const f = await follow(r.body.taskId, followKind, followExtra);
@@ -206,7 +220,7 @@ if (taskKey) await audit("aetherwave_get_job", { taskId: taskKey, kind: "merch-m
 if (PRINTFUL) {
   await audit("aetherwave_printful_list_products", { limit: 3 }, { check: (b) => (Array.isArray(b) ? null : "not an array") });
   const printfileUrl = mock.body?.printfileUrl;
-  const cp = await audit("aetherwave_printful_create_product", { name: "MCP AUDIT 2026-09-30 (delete me)", garmentId: 71, color: "Black", placement: "front", printfileUrl, retailPrice: 29.99, sizes: ["M"] }, {
+  const cp = await audit("aetherwave_printful_create_product", { name: `MCP AUDIT ${new Date().toISOString().slice(0, 10)} (delete me)`, garmentId: 71, color: "Black", placement: "front", printfileUrl, retailPrice: 29.99, sizes: ["M"] }, {
     skip: printfileUrl ? null : "not run (no printfileUrl from mockup)", note: "created then deleted again via Printful API in the same run",
   });
   if (cp.body?.printfulProductId) {
