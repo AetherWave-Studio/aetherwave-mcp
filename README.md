@@ -6,7 +6,7 @@
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
-One install. One token. Thirty-one default tools covering:
+One install. One token. Thirty-three default tools covering:
 
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo
@@ -15,7 +15,8 @@ One install. One token. Thirty-one default tools covering:
 - **Video** - Grok Imagine (KIE+fal fallback), Wan 2.7, Hailuo 02, Seedance Pro/Lite, Kling 2.6 (audio), VEO 3.1, Happy Horse
 - **Video utility** - Atlas upscaler (1080p/2K), rembg u2netp background removal, Luma Ray 2 Flash reframe
 - **Audio mastering** - 12 genre/style presets via the AetherWave Python service
-- **Gallery read** - paginated list of your saved creations
+- **Gallery** - upload your own images, audio and video (local file, URL or data URL), and a paginated list of your saved creations
+- **User manuals** - the MCP, Graphic Novel Studio, UGC Studio and Project Studio manuals as PDF links (saved to Downloads on the npx server)
 - **Comic books** - 9 tools driving the AetherWave Graphic Novel Engine end to end: cast, character references, script, panels, lettered pages, and a PDF / EPUB / CBZ download link
 - **Merch** - 4 tools: garment catalog, design-to-mockup, and (with `PRINTFUL_API_TOKEN`) 2 more that create and list products in your own Printful store, plus 1 admin shop-listing tool
 
@@ -117,6 +118,8 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_reframe_video` | Luma Ray 2 Flash reframe to new aspect ratio |
 | `aetherwave_master_audio` | AI mastering across 12 genre/style presets. 20 cr/track, free on Producer / Mogul / Ultimate plans |
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
+| `aetherwave_upload_to_gallery` | Put your own image, audio or video into your gallery from a local file (npx only), a URL or a data URL. Free, counts against storage, up to 95 MB |
+| `aetherwave_get_user_manual` | Link to a user manual PDF (`mcp`, `graphic-novel`, `ugc-studio`, `project-studio`); on the npx server also saves it to Downloads |
 | `aetherwave_comic_estimate` | Free quote for a comic: script + panel credits for a page count |
 | `aetherwave_comic_create` | Create a comic project (title, premise, cast, art style). Free |
 | `aetherwave_comic_character_reference` | Generate (6 cr each) or approve a character's reference image |
@@ -531,6 +534,34 @@ AI mastering via the AetherWave Python service. Synchronous response (route poll
 
 **Returns:** `{ success, masteredUrl, preset, trackTitle, creditsCharged, isFree }`
 
+### `aetherwave_upload_to_gallery`
+
+Saves a file the user already has into their AetherWave gallery and returns a permanent URL that every other tool accepts. Free (no credits); it counts against the account's storage, and an upload over the plan's storage is refused with the space left.
+
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `filePath` | string | one of the three | A file on this computer. **npx server only**; the remote connector cannot read your disk |
+| `url` | string | one of the three | Public http or https link. Fetched by the server; links that resolve to private or internal addresses are refused |
+| `dataUrl` | string | one of the three | A `data:` URL |
+| `title` | string | no | Gallery title. Defaults to the file name |
+| `description` | string | no | |
+| `tags` | string[] | no | Up to 20 |
+
+Types: images png jpg webp gif, audio mp3 wav m4a flac ogg, video mp4 webm mov. Up to 95 MB per file; larger files go through the website uploader.
+
+**Returns:** `{ success, creationId, url, type, title, sizeBytes }`
+
+### `aetherwave_get_user_manual`
+
+The download link for a user manual PDF. On the npx server it also saves the PDF to the user's Downloads folder (or `saveTo`), and returns the path. Free.
+
+| Param | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `manual` | enum | no | `mcp` | `mcp`, `graphic-novel`, `ugc-studio`, `project-studio` |
+| `saveTo` | string | no | Downloads | npx server only. A folder, or `"none"` for the link only |
+
+**Returns:** `{ manual, title, url, savedTo?, sizeBytes? }`
+
 ### `aetherwave_list_my_creations`
 
 Paginated gallery read. Useful for chaining ("reframe my last 5 images to 9:16").
@@ -729,6 +760,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 ## Versioning
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
+
+**0.3.1** (unreleased): `aetherwave_upload_to_gallery` and `aetherwave_get_user_manual`, 33 default tools.
 
 **0.3.0** (2026-09-30): soft 45 s deadline on every long tool (returns `state: "running"` + `taskId` instead of timing out the client), `async: true` on every tool, `aetherwave_get_job` covers all pipelines, 9 comic tools, 4 merch tools (+2 Printful tools with `PRINTFUL_API_TOKEN`, +1 admin), 31 default tools.
 
