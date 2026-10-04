@@ -107,7 +107,7 @@ async function audit(name, args, { est = 0, check = null, followKind = null, fol
   row.response = typeof r.body === "object" ? JSON.stringify(r.body).slice(0, 700) : String(r.body).slice(0, 700);
   // A deliberate refusal (refuse() in src/comic.ts) is isError + { refused: true }.
   // When the row's contract check expects that refusal, it is the pass path.
-  if (r.isError && r.body?.refused && check && !check(r.body)) {
+  if (r.isError && r.body?.refused && check && !(await check(r.body))) {
     row.result = `pass (refused as designed: ${String(r.body.message).slice(0, 120)})`;
   } else if (r.isError) {
     row.result = `fail (${String(typeof r.body === "object" ? r.body.message || JSON.stringify(r.body) : r.body).slice(0, 200)})`;
@@ -119,7 +119,7 @@ async function audit(name, args, { est = 0, check = null, followKind = null, fol
   } else {
     row.result = "pass";
   }
-  if (check && row.result.startsWith("pass")) { const m = check(r.body); if (m) { row.mismatch = m; row.result += " (mismatch noted)"; } }
+  if (check && row.result.startsWith("pass")) { const m = await check(r.body); if (m) { row.mismatch = m; row.result += " (mismatch noted)"; } }
   const b1 = await balance();
   row.credits = Number.isNaN(b0) || Number.isNaN(b1) ? null : b0 - b1;
   if (row.credits > 0) spent += row.credits;
@@ -139,6 +139,28 @@ const vids = await audit("aetherwave_list_my_creations", { type: "video", limit:
 const shortVideo = (vids.body?.items || []).filter((v) => v.duration && v.duration <= 4).sort((a, b) => a.duration - b.duration)[0];
 const auds = await call("aetherwave_list_my_creations", { type: "audio", limit: 20 });
 const sourceAudio = (auds.body?.items || []).find((a) => a.duration && a.duration < 120 && /\.mp3$/i.test(a.contentUrl || ""));
+
+// ─── gallery upload + manuals (free) ───────────────────────────────────────
+// A 1x1 PNG: proves the multipart route, the auth header and the quota check
+// still accept an upload. Leaves one tiny "MCP audit" image in the gallery.
+const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+if (tools.some((t) => t.name === "aetherwave_upload_to_gallery")) {
+  await audit("aetherwave_upload_to_gallery", { dataUrl: PIXEL, title: `MCP audit ${new Date().toISOString().slice(0, 10)} (delete me)` }, {
+    note: "leaves one 1x1 image in the gallery", check: (b) => (b.creationId && /^https:\/\//.test(b.url || "") ? null : "no creationId/url"),
+  });
+}
+// Every manual link must still resolve; a moved PDF breaks the tool silently.
+for (const manual of ["mcp", "graphic-novel", "ugc-studio", "project-studio"]) {
+  if (!tools.some((t) => t.name === "aetherwave_get_user_manual")) break;
+  await audit("aetherwave_get_user_manual", { manual, saveTo: "none" }, {
+    note: `manual ${manual}`,
+    check: async (b) => {
+      if (!b.url) return "no url";
+      const r = await fetch(b.url, { method: "HEAD" });
+      return r.ok && /pdf/.test(r.headers.get("content-type") || "") ? null : `HEAD ${r.status} ${r.headers.get("content-type")}`;
+    },
+  });
+}
 
 // ─── images (cheapest models) ──────────────────────────────────────────────
 const gen = await audit("aetherwave_generate_image", { prompt: PROMPT, model: "z-image-turbo", aspectRatio: "1:1" }, {

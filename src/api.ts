@@ -80,6 +80,17 @@ export class AetherwaveClient {
     return await this.handle<T>(res, path);
   }
 
+  /** Authenticated multipart POST (file uploads). fetch sets the boundary
+   *  header itself, so Content-Type must NOT be set here. */
+  async postForm<T = any>(path: string, form: FormData): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers: this.authHeaders(),
+      body: form,
+    });
+    return await this.handle<T>(res, path);
+  }
+
   /**
    * GET. Sends auth header when auth = "key", omits it for "public" endpoints.
    */
