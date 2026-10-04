@@ -425,7 +425,7 @@ Comic script/draw/assemble progress is per project, not per task: use aetherwave
     "aetherwave_generate_image",
     {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-      title: "Generate image (Grok Imagine, GPT Image 2, Seedream V4, Wan, Imagen 4, Nano Banana, Ideogram V3, Z-Image Turbo)",
+      title: "Generate image (Grok Imagine, GPT Image 2, Seedream V4, Wan, Nano Banana, Flux, Z-Image Turbo)",
       description:
         `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 2 images per generation, 6 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
 
@@ -438,17 +438,16 @@ Default: \`grok-imagine-t2i\` (6 cr, 2 outputs per call, fast, general purpose).
 Pick a different model when the prompt has these signals:
 
 - "single best result" / "one image" / production / no time to pick from variations -> \`gpt-image-2-t2i\` (9 cr, 1 output, top general quality)
-- "photoreal" / "photo of" / "realistic"     -> \`gpt-image-2-t2i\` (9 cr, best general realism) or \`imagen-4\` (12 cr, very high quality) or \`z-image-turbo\` (2 cr, fastest)
-- "highest quality" / "premium" / no budget  -> \`gpt-image-2-t2i\` at 2K, or \`grok-imagine-quality-t2i\` (16 cr @ 1K, 22 cr @ 2K), or \`imagen-4-ultra\`
-- Text inside the image (signs, posters, typography) -> \`ideogram-v3-t2i\` (best in class) or \`gpt-image-2-t2i\` (also strong)
-- Artistic / painterly / stylized            -> \`midjourney-t2i\`
+- "photoreal" / "photo of" / "realistic"     -> \`gpt-image-2-t2i\` (9 cr, best general realism), \`nano-banana-2\` (8 cr @ 1K), or \`z-image-turbo\` (2 cr, fastest)
+- "highest quality" / "premium" / no budget  -> \`gpt-image-2-t2i\` at 2K (12 cr), or \`grok-imagine-quality-t2i\` (14 cr)
+- Text inside the image (signs, posters, typography) -> \`gpt-image-2-t2i\` (strongest lettering of the live models)
 - Album art / cover art                      -> \`gpt-image-2-t2i\` for one strong image; \`grok-imagine-t2i\` for 2 variations to choose from; \`seedream-v4-t2i\` if 4K wanted
-- Logo or design with embedded text          -> \`ideogram-v3-t2i\`
+- Logo or design with embedded text          -> \`gpt-image-2-t2i\`
 - NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
 - Cheapest possible / quick test             -> \`z-image-turbo\` (2 cr)
 - Multiple variations to compare             -> keep \`grok-imagine-t2i\` (2 outputs per call) or use \`numImages\` on a multi-output model
 
-For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer (\`midjourney-i2i\`), premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
+For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer, premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
 
 Always pass an explicit \`aspectRatio\` (e.g. "1:1" for square album art, "16:9" for video thumbnails, "9:16" for shorts/reels). Some upstream providers reject submissions with no aspect ratio.
 
@@ -566,8 +565,7 @@ Pick a different model when:
 - Need a single deterministic output, or 4K resolution           -> \`seedream-v4-edit\` (7 cr per image, supports 1K/2K/4K, multi-image up to 6)
 - Subtle edits / preserve composition / character consistency   -> \`flux-kontext-pro\` or \`flux-kontext-max\`
 - NSFW edits                                                    -> \`wan-2.5-spicy-i2i\`
-- Highest quality, time is not a concern (~5 min OK)            -> \`gpt-image-1.5-i2i\` or \`grok-imagine-quality-i2i\` (16 cr @ 1K, 22 cr @ 2K)
-- Stylized / artistic transformation                            -> \`midjourney-i2i\`
+- Highest quality, time is not a concern (~5 min OK)            -> \`gpt-image-1.5-i2i\` (6 cr medium, 31 cr high) or \`grok-imagine-quality-i2i\` (14 cr)
 
 If the user simply says "edit this image" with no other signal, default to \`grok-imagine-i2i\`.` + RETURNS_NOTE,
       inputSchema: {
@@ -649,23 +647,23 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     },
   );
 
-  // ─── upscale image (Topaz) ───────────────────────────────────────────────
+  // ─── upscale image (Atlas) ───────────────────────────────────────────────
   server.registerTool(
     "aetherwave_upscale_image",
     {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-      title: "Upscale image (Topaz)",
+      title: "Upscale image",
       description:
-        "Upscales a source image using Topaz's high-fidelity upscaler. Pass a public `imageUrl` and an `upscaleFactor`. Credit cost depends on the source resolution × factor; small images cost less than large ones at the same factor. Returns the upscaled image URL." + RETURNS_NOTE,
+        "Upscales a source image 2x or 4x. Pass a public `imageUrl` and an `upscaleFactor`. Flat 4 credits. Returns the upscaled image URL." + RETURNS_NOTE,
       inputSchema: {
         imageUrl: z
           .string()
           .url()
           .describe("Public URL of the source image."),
         upscaleFactor: z
-          .enum(["1x", "2x", "4x", "8x"])
+          .enum(["2x", "4x"])
           .optional()
-          .describe("Upscale multiplier. Defaults to '2x'. '8x' is heavy; use only on small sources."),
+          .describe("Upscale multiplier, '2x' or '4x'. Defaults to '2x'."),
         ...waitArgs,
       },
     },
@@ -988,22 +986,22 @@ If the user simply says "edit this image" with no other signal, default to \`gro
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate video (Grok Imagine, Wan 2.7, Hailuo 02, Seedance, Kling 2.6, VEO 3.1, Happy Horse)",
       description:
-        `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4-6 cr/s, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation takes 1-8 minutes, so this tool almost always returns state "running" with a taskId: poll aetherwave_get_job with kind "video".
+        `Generates a short-form video from a text prompt (T2V) or a text prompt + starting image (I2V). Submits, polls, and returns the final video URL. Default model is 'grok-imagine-t2v' (fast, 4 cr/s at 480p and 7 at 720p, with built-in KIE -> fal.ai fallback). Use list_video_models for the full lineup with credit cost per second. I2V models (e.g. 'grok-imagine-i2v', 'seedance-pro-i2v') require a public \`imageUrl\`. Video generation takes 1-8 minutes, so this tool almost always returns state "running" with a taskId: poll aetherwave_get_job with kind "video".
 
 ## Model selection guide for videos (when the user does not specify a model)
 
-Default: \`grok-imagine-t2v\` (4-6 cr/s, fast, has KIE -> fal.ai fallback for redundancy. Best general-purpose).
+Default: \`grok-imagine-t2v\` (4 cr/s at 480p, 7 at 720p, fast, has KIE -> fal.ai fallback for redundancy. Best general-purpose).
 
 Pick a different model when the prompt has these signals:
 
-- "highest quality" / "premium" / broadcast / commercial    -> \`veo3.1-quality\` or \`veo3-quality\` (Google's flagship, fixed 350-560 cr for 8s, 3-5 min)
-- "fast premium" / quick high-quality                       -> \`veo3-fast\` or \`veo3.1-fast\` (84 cr fixed for 8s)
+- "highest quality" / "premium" / broadcast / commercial    -> \`veo3-quality\` (Google VEO 3.1 Quality, fixed 350 cr for 8s, 3-5 min)
+- "fast premium" / quick high-quality                       -> \`veo3-fast\` (VEO 3.1 Fast, 84 cr fixed for 8s) or \`veo3-lite\` (42 cr)
 - Cinematic camera moves / dolly / pan                      -> \`seedance-pro-t2v\` (3-10 cr/s) or \`kling-3.0-pro-t2v\` (26 cr/s)
-- Realistic human motion / faces                            -> \`hailuo-2.3-pro-i2v\` (I2V, supply imageUrl)
+- Realistic human motion / faces                            -> \`hailuo-2.3-pro\` (I2V, supply imageUrl)
 - Talking head / lip sync                                   -> \`kling-avatar-pro\` (23 cr/s) or \`infinitalk\` (5-17 cr/s)
-- Anime / stylized / fantasy                                -> \`wan-2.7-t2v\`
+- Anime / stylized / fantasy                                -> \`wan-2-7-t2v\`
 - NSFW / adult                                              -> \`wan-22-nsfw-i2v\` (I2V only; auto-tags adult)
-- Animate this exact image                                  -> any I2V variant (\`grok-imagine-i2v\`, \`seedance-pro-i2v\`, \`hailuo-2.3-pro-i2v\`)
+- Animate this exact image                                  -> any I2V variant (\`grok-imagine-i2v\`, \`seedance-pro-i2v\`, \`hailuo-2.3-pro\`)
 - First + last frame interpolation                          -> \`seedance-pro-i2v\` with both \`imageUrl\` + \`endImageUrl\`
 - Cheapest test                                             -> \`hailuo-2.0-standard\` @ 512p (3 cr/s, ~18 cr for 6s) or \`grok-imagine-t2v\` @ 480p (4 cr/s, ~24 cr for 6s)
 - Clip 12-15s                                               -> \`grok-imagine-t2v\` (accepts up to 15s)
