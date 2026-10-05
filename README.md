@@ -707,7 +707,7 @@ Free. Builds the assembled book and returns a download link on AetherWave storag
 
 ## Credits & pricing
 
-AetherWave uses a single credit pool. Buy bundles starting at $4.99 / 500 credits (bundle credits never expire) or subscribe to Studio ($9.99/mo, 1,700 credits, 3-day free trial). Both work for API calls.
+AetherWave uses a single credit pool. Buy bundles starting at $4.99 / 500 credits (bundle credits never expire) or subscribe to Studio ($9.99/mo, 1,700 credits; no free trial, billing starts at signup). Both work for API calls.
 
 Typical costs:
 
