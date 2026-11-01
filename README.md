@@ -313,7 +313,8 @@ T2I or I2I. Submits, polls, returns final URLs.
 | `aspectRatio` | string | no | model default | e.g. `1:1`, `16:9`, `9:16` |
 | `resolution` | string | no | model default | `1K`, `2K`, some accept `480p`/`720p` |
 | `referenceImages` | string[] | no | - | URLs for I2I; required if model is I2I |
-| `numImages` | int (1-8) | no | model default | For multi-output models |
+| `maxImages` | int (1-6) | no | model default | Images to return, billed per image. Only `seedream-v4-t2i` (1-6) and `wan-2-7-image` (1-4) take a count |
+| `numImages` | int (1-6) | no | - | Old name for `maxImages`, still accepted |
 | `negative_prompt` | string | no | - | Supported by some models |
 | `seed` | int | no | - | Deterministic generation, supported by some |
 
@@ -425,7 +426,7 @@ I2I editing guided by a text prompt.
 | `aspectRatio` | string | no | source ratio | e.g. `1:1`, `16:9` |
 | `resolution` | string | no | model default | Some models: `1K`, `2K`, `4K` |
 | `quality` | enum | no | model default | `low`, `medium`, `high` (GPT Image) |
-| `maxImages` | int (1-8) | no | - | For multi-output models |
+| `maxImages` | int (1-6) | no | - | Variations to return, billed per image. Only `seedream-v4-edit` (1-6) and `qwen-image-edit-plus` (1-3) take a count |
 | `renderingSpeed` | enum | no | model default | `turbo`, `balanced`, `quality` |
 | `negative_prompt` | string | no | - | Supported by some models |
 
