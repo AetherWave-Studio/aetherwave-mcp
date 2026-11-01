@@ -29,6 +29,7 @@ import {
 import { registerComicTools } from "./comic.js";
 import { registerMerchTools } from "./merch.js";
 import { registerGalleryTools } from "./gallery.js";
+import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
  * while the package shipped 0.2.9, so every client was told the wrong version at
@@ -446,7 +447,7 @@ Pick a different model when the prompt has these signals:
 - Logo or design with embedded text          -> \`gpt-image-2-t2i\`
 - NSFW / adult / explicit                    -> \`wan-2.5-spicy-t2i\` (auto-tags creation as 18+; routes to adult gallery)
 - Cheapest possible / quick test             -> \`z-image-turbo\` (2 cr)
-- Multiple variations to compare             -> keep \`grok-imagine-t2i\` (2 outputs per call) or use \`numImages\` on a multi-output model
+- Multiple variations to compare             -> keep \`grok-imagine-t2i\` (2 outputs per call) or \`seedream-v4-t2i\` with \`maxImages\` up to 6
 
 For I2I (reference image provided): prefer the dedicated \`aetherwave_edit_image\` tool for "change something in this image" intent. Use \`aetherwave_generate_image\` with I2I models only when you specifically want style transfer, premium quality (\`grok-imagine-quality-i2i\`), or adult content (\`wan-2.5-spicy-i2i\`).
 
@@ -493,13 +494,22 @@ Ask the user only when:
           .describe(
             "Array of public image URLs for image-to-image generation. Required when using an I2I model. A single URL string is also accepted (wrapped as a one-element array).",
           ),
+        maxImages: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_IMAGE_COUNT)
+          .optional()
+          .describe(
+            "Number of images to return, billed per image. Only `seedream-v4-t2i` (1-6) and `wan-2-7-image` (1-4) take a count; every other model returns its fixed output and ignores it.",
+          ),
         numImages: z.coerce
           .number()
           .int()
           .min(1)
-          .max(8)
+          .max(MAX_IMAGE_COUNT)
           .optional()
-          .describe("Number of images for models that support multiple outputs."),
+          .describe("Old name for `maxImages`, still accepted. Use `maxImages`."),
         negative_prompt: z
           .string()
           .optional()
@@ -522,7 +532,7 @@ Ask the user only when:
             aspectRatio: args.aspectRatio,
             resolution: args.resolution,
             referenceImages: args.referenceImages,
-            numImages: args.numImages,
+            ...imageCountBody(args),
             negative_prompt: args.negative_prompt,
             seed: args.seed,
           },
@@ -597,9 +607,11 @@ If the user simply says "edit this image" with no other signal, default to \`gro
           .number()
           .int()
           .min(1)
-          .max(8)
+          .max(MAX_IMAGE_COUNT)
           .optional()
-          .describe("Number of variations to return for multi-output models."),
+          .describe(
+            "Number of variations to return, billed per image. Only `seedream-v4-edit` (1-6) and `qwen-image-edit-plus` (1-3) take a count; every other model ignores it.",
+          ),
         renderingSpeed: z
           .enum(["turbo", "balanced", "quality"])
           .optional()
