@@ -28,8 +28,9 @@ import {
 } from "./api.js";
 import { registerComicTools } from "./comic.js";
 import { registerMerchTools } from "./merch.js";
-import { registerGalleryTools } from "./gallery.js";
+import { fetchPublic, registerGalleryTools } from "./gallery.js";
 import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
+import { CHARACTER_DEFAULT_IMAGE_MODEL, IMAGE_MAX_REFERENCES, VIDEO_MAX_REFERENCES, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
  * while the package shipped 0.2.9, so every client was told the wrong version at
@@ -144,7 +145,7 @@ async function toDataUrl(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) {
     throw new Error(`referenceImages must be http(s) or data URLs (got: ${url.slice(0, 40)})`);
   }
-  const res = await fetch(url);
+  const res = await fetchPublic(url);
   if (!res.ok) {
     throw new Error(`Could not fetch reference image (${res.status}): ${url}`);
   }
@@ -169,7 +170,16 @@ async function toDataUrl(url: string): Promise<string> {
  * (src/http.ts) can construct a server - the HTTP host builds one per session
  * with that user's own API key.
  */
-export function buildServer(client: AetherwaveClient): McpServer {
+export function buildServer(
+  client: AetherwaveClient,
+  /** local: true = the npx stdio server on the user's own machine (local file
+   *  paths, operator tools when their env is set). Remote hosts and embedders
+   *  pass false. Defaults to "not the remote HTTP host". */
+  opts: { local?: boolean } = {},
+): McpServer {
+  // Loaded through ./embed.js, the default is REMOTE: a host that forgets the
+  // option must never let a member read the server's own files.
+  const local = opts.local ?? (!process.env.AETHERWAVE_MCP_HTTP && !(globalThis as any).__aetherwaveMcpEmbedded);
   const server = new McpServer({
     name: "aetherwave",
     version: VERSION,
@@ -431,6 +441,10 @@ Comic script/draw/assemble progress is per project, not per task: use aetherwave
       description:
         `Generates one or more images from a text prompt (T2I) or a text prompt + reference image(s) (I2I). Submits the job, polls until terminal, and returns the final image URLs. Default model is 'grok-imagine-t2i' (fast, 2 images per generation, 6 credits). Use list_image_models to see the full lineup with pricing. For I2I, pass \`referenceImages\` as an array of public image URLs and pick a model with I2I support (e.g. 'grok-imagine-i2i', 'wan-2.5-spicy-i2i').
 
+## Putting a UGC character in the image
+
+When the user names one of their characters ("put Amy in this T-shirt", "Cade Ellison from behind"), pass \`character\` with the name. The tool attaches that character's approved reference pack and identity text for you, and defaults the model to \`gpt-image-2-t2i\`. Put the product, garment or location in \`referenceImages\` as usual; describe the pose and framing in the prompt. Characters are the member's own creations, not third parties. Call \`aetherwave_list_characters\` if you need the names.
+
 ## Model selection guide (when the user does not specify a model)
 
 Default: \`grok-imagine-t2i\` (6 cr, 2 outputs per call, fast, general purpose).
@@ -459,6 +473,12 @@ Ask the user only when:
 - A single generation would cost more than 20 credits and the user has not confirmed` + RETURNS_NOTE,
       inputSchema: {
         prompt: z.string().describe("Text description of the image to generate."),
+        character: z
+          .string()
+          .optional()
+          .describe(
+            "Name (or handle) of one of the caller's UGC characters, e.g. 'Amy' or 'Cade Ellison'. Attaches the character's reference pack and identity text, and defaults the model to gpt-image-2-t2i.",
+          ),
         model: z
           .string()
           .optional()
@@ -524,14 +544,21 @@ Ask the user only when:
     },
     async (args) => {
       try {
+        let prompt = args.prompt;
+        let referenceImages = args.referenceImages;
+        let character: ResolvedCharacter | null = null;
+        if (args.character) {
+          character = await resolveCharacter(client, args.character);
+          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character, IMAGE_MAX_REFERENCES));
+        }
         const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-image",
           submitBody: {
-            prompt: args.prompt,
-            model: args.model || "grok-imagine-t2i",
+            prompt,
+            model: args.model || (character ? CHARACTER_DEFAULT_IMAGE_MODEL : "grok-imagine-t2i"),
             aspectRatio: args.aspectRatio,
             resolution: args.resolution,
-            referenceImages: args.referenceImages,
+            referenceImages,
             ...imageCountBody(args),
             negative_prompt: args.negative_prompt,
             seed: args.seed,
@@ -543,7 +570,7 @@ Ask the user only when:
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
         if (running) {
-          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null }));
+          return jsonResult(runningResult(taskId, "image", { lastState: status?.state || status?.status || null, ...(character ? { character: character.name } : {}) }));
         }
         return jsonResult({
           taskId,
@@ -551,6 +578,7 @@ Ask the user only when:
           images: status.images || [],
           autoSaved: status.autoSaved ?? null,
           creationIds: status.creationIds || [],
+          ...(character ? { character: character.name } : {}),
         });
       } catch (err) {
         return errorResult(err);
@@ -1028,7 +1056,7 @@ Pick a different model when the prompt has these signals:
 
 ## Consistent characters
 
-If the user names a person they already have ("my Amy character"), call \`aetherwave_list_characters\` FIRST, append that character's \`identityBlock\` verbatim to the prompt, and pass their \`referenceImages\`. Do NOT use \`imageUrl\` for this - a starting frame switches the engine to first-frame mode and drops the reference images, which is the opposite of what a consistent character needs.
+If the user names a person they already have ("my Amy character"), pass \`character: "Amy"\`: the tool attaches that character's reference pack and appends its \`identityBlock\` verbatim (or do it by hand: call \`aetherwave_list_characters\`, append \`identityBlock\`, pass \`referenceImages\`). Do NOT use \`imageUrl\` for this - a starting frame switches the engine to first-frame mode and drops the reference images, which is the opposite of what a consistent character needs.
 
 ## Writing dialogue
 
@@ -1043,6 +1071,12 @@ Ask the user only when:
 - They asked for "the best" with no other signal; surface 2-3 options with cost ranges` + RETURNS_NOTE,
       inputSchema: {
         prompt: z.string().describe("Text description of the video scene."),
+        character: z
+          .string()
+          .optional()
+          .describe(
+            "Name (or handle) of one of the caller's UGC characters, e.g. 'Amy'. Attaches the character's reference pack as referenceImages and appends its identity text. Cannot be combined with imageUrl.",
+          ),
         model: z
           .string()
           .optional()
@@ -1103,6 +1137,16 @@ Ask the user only when:
          * reference images are dropped. Silently honouring one and discarding
          * the other is how a "keep this character consistent" request quietly
          * returns a drifting face, so refuse the ambiguous call. */
+        let prompt = args.prompt;
+        let referenceImages = args.referenceImages;
+        let character: ResolvedCharacter | null = null;
+        if (args.character) {
+          if (args.imageUrl) {
+            return errorResult(new Error("character and imageUrl cannot be combined: a starting frame drops the character's reference images. Pass character alone (plus referenceImages if you need more anchors)."));
+          }
+          character = await resolveCharacter(client, args.character);
+          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character, VIDEO_MAX_REFERENCES));
+        }
         if (args.imageUrl && args.referenceImages?.length) {
           return errorResult(
             new Error(
@@ -1117,14 +1161,14 @@ Ask the user only when:
          * and re-encode every reference for every call, and the error it gets
          * otherwise is `Invalid or empty base64 image data`, which reads like a
          * corrupt payload rather than an unsupported scheme. */
-        const additionalImages = args.referenceImages?.length
-          ? await Promise.all(args.referenceImages.map((u) => toDataUrl(u)))
+        const additionalImages = referenceImages?.length
+          ? await Promise.all(referenceImages.map((u) => toDataUrl(u)))
           : undefined;
 
         const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-video",
           submitBody: {
-            prompt: args.prompt,
+            prompt,
             model: args.model || "grok-imagine-t2v",
             duration: args.duration,
             resolution: args.resolution,
@@ -1142,7 +1186,7 @@ Ask the user only when:
           successStates: ["success", "complete", "completed", "succeeded", "done"],
         });
         if (running) {
-          return jsonResult(runningResult(taskId, "video", { lastState: status?.state || status?.status || null }));
+          return jsonResult(runningResult(taskId, "video", { lastState: status?.state || status?.status || null, ...(character ? { character: character.name } : {}) }));
         }
         const videoUrl =
           status?.data?.video?.url ||
@@ -1439,10 +1483,10 @@ Ask the user only when:
   registerComicTools(server, client);
 
   // ─── merch (print-on-demand; printful_* tools only locally, with the user's own token) ──
-  registerMerchTools(server, client, { local: !process.env.AETHERWAVE_MCP_HTTP });
+  registerMerchTools(server, client, { local });
 
   // ─── gallery upload + user manuals (local file paths and saving to disk only on npx) ──
-  registerGalleryTools(server, client, { local: !process.env.AETHERWAVE_MCP_HTTP });
+  registerGalleryTools(server, client, { local });
 
   return server;
 }
@@ -1461,7 +1505,9 @@ async function mainStdio() {
 // claimed the process by setting AETHERWAVE_MCP_HTTP before dynamically
 // importing this module. This keeps the published npx bin behaving exactly as
 // before while letting http.ts reuse buildServer() without spawning stdio.
-if (!process.env.AETHERWAVE_MCP_HTTP) {
+// src/embed.ts claims it the same way through a global, so a platform that
+// imports the package never touches the process environment.
+if (!process.env.AETHERWAVE_MCP_HTTP && !(globalThis as any).__aetherwaveMcpEmbedded) {
   mainStdio().catch((err) => {
     console.error("Fatal error in @aetherwave/mcp:", err);
     process.exit(1);

@@ -21,6 +21,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import http from "node:http";
+import https from "node:https";
+import { Readable } from "node:stream";
 import { basename, extname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { z } from "zod";
@@ -65,37 +68,94 @@ export function isPrivateAddress(ip: string): boolean {
   return true; // not an IP at all: refuse rather than guess
 }
 
-async function assertPublicUrl(raw: string): Promise<URL> {
+/** Resolve a URL's host and refuse it unless EVERY address is public. Returns the address to connect to. */
+async function resolvePublic(raw: string): Promise<{ url: URL; address: string; family: 4 | 6 }> {
   let u: URL;
   try { u = new URL(raw); } catch { throw new Error(`Not a valid URL: ${raw}`); }
-  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("Only http and https URLs can be uploaded");
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("Only http and https URLs can be fetched");
   const host = u.hostname.replace(/^\[|\]$/g, "");
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
+  const addrs: { address: string; family?: number }[] = isIP(host)
+    ? [{ address: host, family: isIP(host) }]
+    : await lookup(host, { all: true }).catch(() => []);
   if (!addrs.length) throw new Error(`Could not resolve ${host}`);
   if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error(`Refusing to fetch ${host}: it resolves to a private address`);
-  return u;
+  const first = addrs[0];
+  return { url: u, address: first.address, family: (first.family === 6 || isIP(first.address) === 6 ? 6 : 4) };
+}
+
+/** Refuse a URL unless its host resolves only to public addresses. */
+export async function assertPublicUrl(raw: string): Promise<URL> {
+  return (await resolvePublic(raw)).url;
+}
+
+/**
+ * One GET connected to the address that was CHECKED, not a fresh lookup:
+ * a second DNS answer (rebinding, TTL 0) could otherwise point the real
+ * connection at 127.0.0.1 or 169.254.169.254 after the check passed.
+ * TLS still verifies the certificate against the URL's hostname (SNI).
+ */
+export function getPinned(u: URL, address: string, family: 4 | 6): Promise<Response> {
+  const mod = u.protocol === "https:" ? https : http;
+  return new Promise((resolveRes, reject) => {
+    const req = mod.request(
+      u,
+      {
+        method: "GET",
+        timeout: 60_000,
+        lookup: ((_host: string, opts: any, cb: any) => {
+          if (opts?.all) cb(null, [{ address, family }]);
+          else cb(null, address, family);
+        }) as any,
+      },
+      (res) => {
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) {
+          if (v === undefined) continue;
+          if (Array.isArray(v)) for (const x of v) headers.append(k, x);
+          else headers.set(k, String(v));
+        }
+        const status = res.statusCode || 502;
+        const noBody = [204, 205, 304].includes(status);
+        if (noBody) res.resume();
+        const out = new Response(noBody ? null : (Readable.toWeb(res) as any), { status, statusText: res.statusMessage, headers });
+        Object.defineProperty(out, "url", { value: u.href });
+        resolveRes(out);
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error(`Timed out fetching ${u.host}`)));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 type Media = { bytes: Uint8Array; mime: string; filename: string };
 
-/** Fetch a public URL with the size cap enforced while streaming. */
-async function fromUrl(raw: string): Promise<Media> {
-  /* Redirects are followed BY HAND, each hop checked before it is requested:
-   * with redirect "follow" a public URL that 302s to an internal address
-   * would already have been fetched by the time res.url could be checked. */
-  let u = await assertPublicUrl(raw);
-  let res: Response | null = null;
-  for (let hop = 0; hop <= 5; hop++) {
-    res = await fetch(u, { redirect: "manual" });
+/**
+ * GET a URL that must resolve to a public address, following redirects BY HAND
+ * so every hop is checked before it is requested (with redirect "follow" a
+ * public URL that 302s to an internal address would already have been fetched).
+ * Used for every caller-supplied URL the server fetches: on the remote host and
+ * inside an embedding platform, the server sits next to private services.
+ * @param raw the caller's URL
+ */
+export async function fetchPublic(raw: string): Promise<Response> {
+  let target = await resolvePublic(raw);
+  for (let hop = 0; ; hop++) {
+    const res = await getPinned(target.url, target.address, target.family);
     const loc = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && loc) {
       await res.body?.cancel().catch(() => {});
       if (hop === 5) throw new Error("Too many redirects");
-      u = await assertPublicUrl(new URL(loc, u).href);
+      target = await resolvePublic(new URL(loc, target.url).href);
       continue;
     }
-    break;
+    return res;
   }
+}
+
+/** Fetch a public URL with the size cap enforced while streaming. */
+async function fromUrl(raw: string): Promise<Media> {
+  const res = await fetchPublic(raw); // every redirect hop checked (see fetchPublic)
   if (!res || !res.ok) throw new Error(`Fetching the URL failed: ${res?.status} ${res?.statusText}`);
   const declared = Number(res.headers.get("content-length") || 0);
   if (declared > MAX_UPLOAD_BYTES) throw new Error(tooBig(declared));
@@ -111,7 +171,7 @@ async function fromUrl(raw: string): Promise<Media> {
     chunks.push(value);
   }
   const bytes = Buffer.concat(chunks);
-  const name = decodeURIComponent(basename(u.pathname)) || "upload";
+  const name = decodeURIComponent(basename(new URL(res.url || raw).pathname)) || "upload";
   const headerMime = (res.headers.get("content-type") || "").split(";")[0].trim();
   const mime = mediaKind(headerMime) ? headerMime : mimeFromName(name) || headerMime;
   return { bytes, mime, filename: name };

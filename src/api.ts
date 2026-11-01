@@ -39,20 +39,40 @@ export interface ApiClientOptions {
    *  AetherWave backend resolves it to the user (MCP Connector / OAuth path). */
   bearerToken?: string;
   baseUrl?: string;
+  /** Session auth for an embedding platform: headers sent on every
+   *  authenticated request (e.g. the member's Cookie and X-Forwarded-For on
+   *  a loopback call). Counts as auth on its own. */
+  headers?: Record<string, string>;
+  /** Path guard for an embedding platform. Called before every request; a
+   *  false return refuses it without touching the network. Lets the embedder
+   *  keep a fixed (method, path) allowlist even though tools pick the path. */
+  allowRequest?: (method: "GET" | "POST", path: string) => boolean;
 }
 
 export class AetherwaveClient {
   private readonly apiKey?: string;
   private readonly bearerToken?: string;
   private readonly baseUrl: string;
+  private readonly extraHeaders: Record<string, string>;
+  private readonly allowRequest?: (method: "GET" | "POST", path: string) => boolean;
 
   constructor(opts: ApiClientOptions) {
     this.apiKey = opts.apiKey;
     this.bearerToken = opts.bearerToken;
     this.baseUrl = (opts.baseUrl || DEFAULT_BASE).replace(/\/+$/, "");
-    if (!this.apiKey && !this.bearerToken) {
-      throw new Error("AetherwaveClient requires an apiKey or a bearerToken");
+    this.extraHeaders = { ...(opts.headers ?? {}) };
+    this.allowRequest = opts.allowRequest;
+    if (!this.apiKey && !this.bearerToken && !Object.keys(this.extraHeaders).length) {
+      throw new Error("AetherwaveClient requires an apiKey, a bearerToken or session headers");
     }
+  }
+
+  /** Full URL for a request, after the embedder's path guard. */
+  private url(method: "GET" | "POST", path: string): string {
+    if (this.allowRequest && !this.allowRequest(method, path)) {
+      throw new Error(`Request refused by the host's allowlist: ${method} ${path.split("?")[0]}`);
+    }
+    return `${this.baseUrl}${path}`;
   }
 
   /** Auth header: OAuth bearer (forwarded; backend resolves) or X-AW-Key.
@@ -63,13 +83,14 @@ export class AetherwaveClient {
       "User-Agent": CLIENT_UA,
     };
     if (this.bearerToken)
-      return { ...ident, Authorization: `Bearer ${this.bearerToken}` };
-    return { ...ident, "X-AW-Key": this.apiKey as string };
+      return { ...ident, ...this.extraHeaders, Authorization: `Bearer ${this.bearerToken}` };
+    if (this.apiKey) return { ...ident, ...this.extraHeaders, "X-AW-Key": this.apiKey };
+    return { ...ident, ...this.extraHeaders };
   }
 
   /** Authenticated POST. Throws on non-2xx with the error body attached. */
   async post<T = any>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await fetch(this.url("POST", path), {
       method: "POST",
       headers: {
         ...this.authHeaders(),
@@ -83,7 +104,7 @@ export class AetherwaveClient {
   /** Authenticated multipart POST (file uploads). fetch sets the boundary
    *  header itself, so Content-Type must NOT be set here. */
   async postForm<T = any>(path: string, form: FormData): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await fetch(this.url("POST", path), {
       method: "POST",
       headers: this.authHeaders(),
       body: form,
@@ -96,7 +117,7 @@ export class AetherwaveClient {
    */
   async get<T = any>(path: string, auth: "key" | "public" = "key"): Promise<T> {
     const headers: Record<string, string> = auth === "key" ? this.authHeaders() : {};
-    const res = await fetch(`${this.baseUrl}${path}`, { headers });
+    const res = await fetch(this.url("GET", path), { headers });
     return await this.handle<T>(res, path);
   }
 
@@ -124,7 +145,7 @@ export class AetherwaveClient {
       : null;
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}${path}`, {
+      res = await fetch(this.url(method, path), {
         method,
         headers:
           method === "POST"

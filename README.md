@@ -180,6 +180,13 @@ The tools above compose into something the API could not do before: **hand an ag
 
 A UGC character is a recurring on-screen person you have saved in AetherWave - their locked appearance, an approved pack of reference images, a voice and a personality. `aetherwave_list_characters` is how an agent discovers they exist. Without it, an agent told *"shoot this with my Amy character"* has no way to learn who Amy is, and invents a different face for every clip.
 
+**Shortcut (0.4.0):** pass `character: "Amy"` to `aetherwave_generate_image` or `aetherwave_generate_video` and the tool does steps 1 to 3 for you: it looks the character up in your teams, puts their approved reference pack first in `referenceImages` (your own references, such as a T-shirt or a location, go after), and appends their `identityBlock` verbatim. On `generate_image` the model defaults to `gpt-image-2-t2i`, which takes up to 16 references. A name that matches nothing, or more than one character, is an error that lists the names you do have, and nothing is charged.
+
+```js
+// "Put Amy in this T-shirt, facing forward" - one call
+await generateImage({ prompt: "Amy wearing this T-shirt, facing forward, clean studio background", character: "Amy", referenceImages: [shirtMockupUrl], aspectRatio: "3:4" });
+```
+
 ### The loop
 
 ```js
@@ -309,6 +316,7 @@ T2I or I2I. Submits, polls, returns final URLs.
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
 | `prompt` | string | yes | - | Text description of the image |
+| `character` | string | no | - | Name or handle of one of your UGC characters. Attaches their reference pack and identity text; defaults the model to `gpt-image-2-t2i` |
 | `model` | string | no | `grok-imagine-t2i` | Model ID. Use `list_image_models` for full list |
 | `aspectRatio` | string | no | model default | e.g. `1:1`, `16:9`, `9:16` |
 | `resolution` | string | no | model default | `1K`, `2K`, some accept `480p`/`720p` |
@@ -381,6 +389,7 @@ T2V or I2V. Submits, polls for up to ~45 s, and returns the URL if the render fi
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
 | `prompt` | string | yes | - | Text description of the scene |
+| `character` | string | no | - | Name or handle of one of your UGC characters. Attaches their reference pack as `referenceImages` and their identity text. Not with `imageUrl` |
 | `model` | string | no | `grok-imagine-t2v` | Model ID. Use `list_video_models` |
 | `duration` | int (2-30) | no | model default | Seconds. Grok accepts 6-15 |
 | `resolution` | enum | no | model default | `480p`, `720p`, `1080p`, `2K` |
@@ -706,6 +715,25 @@ Free. Builds the assembled book and returns a download link on AetherWave storag
 
 **Returns:** `{ account, exportId, format, status, url, megabytes, note }`. `status` is `building`, `complete` or `error`.
 
+## Embedding the tools in your own server
+
+`@aetherwave-studio/mcp/embed` runs the same tools in-process, so an assistant you host gets every tool, schema and description this server has and picks up new ones with a package update. AetherWave's own VoxBot Chat is built on it.
+
+```js
+import { connectEmbedded, runsWithoutConfirm } from "@aetherwave-studio/mcp/embed";
+
+const session = await connectEmbedded({
+  baseUrl: "https://aetherwavestudio.com",
+  headers: { "X-AW-Key": userApiKey },            // or the member's session headers on a loopback URL
+  allowRequest: (method, path) => isAllowed(method, path), // optional (method, path) allowlist
+});
+session.tools;          // [{ name, description, inputSchema, policy }], operator-only tools left out
+if (runsWithoutConfirm(name)) await session.call(name, args); // free reads
+// anything else spends credits or replaces something: quote it and get the user's OK first
+```
+
+Every tool carries a policy (`TOOL_POLICY`): `charge` ("none" or "credits", with a note on how the price is known up front), `effect` ("read", "create" or "destructive") and `embed` (false for tools that need the operator's own tokens). A test fails the build if a tool ships without one. Importing the module never starts the stdio server.
+
 ## Credits & pricing
 
 AetherWave uses a single credit pool. Buy bundles starting at $4.99 / 500 credits (bundle credits never expire) or subscribe to Studio ($9.99/mo, 1,700 credits; no free trial, billing starts at signup). Both work for API calls.
@@ -765,7 +793,9 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
 
-**0.3.1** (unreleased): `aetherwave_upload_to_gallery` and `aetherwave_get_user_manual`, 33 default tools.
+**0.4.0** (unreleased): `character` on `aetherwave_generate_image` and `aetherwave_generate_video` (one of your UGC characters by name). Image count: `generate_image` now sends `maxImages`, the field the platform reads (`numImages`, which no model read, is kept as an alias). A reference URL that resolves to a private address is refused. New `@aetherwave-studio/mcp/embed` entry for hosting the tools inside another server (see Embedding).
+
+**0.3.1** (unreleased, folded into 0.4.0): `aetherwave_upload_to_gallery` and `aetherwave_get_user_manual`, 33 default tools.
 
 **0.3.0** (2026-09-30): soft 45 s deadline on every long tool (returns `state: "running"` + `taskId` instead of timing out the client), `async: true` on every tool, `aetherwave_get_job` covers all pipelines, 9 comic tools, 4 merch tools (+2 Printful tools with `PRINTFUL_API_TOKEN`, +1 admin), 31 default tools.
 
