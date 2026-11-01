@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { getPinned } from "../dist/gallery.js";
 import {
   buildServer, AetherwaveClient, connectEmbedded, TOOL_POLICY, toolPolicy, runsWithoutConfirm,
   pickCharacter, applyCharacter, CHARACTER_DEFAULT_IMAGE_MODEL,
@@ -81,9 +82,32 @@ test("pickCharacter: exact name, handle, id, then a unique substring", () => {
 
 test("pickCharacter refuses unknown, ambiguous and unfinished characters with the names you do have", () => {
   assert.throws(() => pickCharacter(TEAMS, "Zed"), /No UGC character matches "Zed".*Amy UGC, Cade Ellison/);
-  assert.throws(() => pickCharacter(TEAMS, "e"), /more than one character/);
+  const twoAmys = [{ characters: [{ id: "a1", name: "Amy UGC", referenceImages: ["https://m.example/a1.png"] }, { id: "a2", name: "Amy Rose", referenceImages: ["https://m.example/a2.png"] }] }];
+  assert.throws(() => pickCharacter(twoAmys, "amy"), /more than one character \(Amy UGC, Amy Rose\)/);
+  assert.equal(pickCharacter(twoAmys, "Amy Rose").id, "a2");
   assert.throws(() => pickCharacter(TEAMS, "Draft Dan"), /no approved reference pack/);
   assert.throws(() => pickCharacter([], "Amy"), /no UGC characters yet/);
+});
+
+test("pickCharacter never matches the middle of a name: 'mia' does not attach Jamia", () => {
+  const t = [{ characters: [{ id: "j", name: "Jamia Cole", referenceImages: ["https://m.example/j.png"] }] }];
+  assert.throws(() => pickCharacter(t, "mia"), /No UGC character matches "mia"/);
+  assert.equal(pickCharacter(t, "cole").id, "j");
+});
+
+test("pickCharacter: the same character listed in two teams is one character, not ambiguous", () => {
+  const amy = { id: "c-amy", name: "Amy UGC", referenceImages: ["https://m.example/amy1.png"] };
+  assert.equal(pickCharacter([{ characters: [amy] }, { characters: [amy] }], "Amy UGC").id, "c-amy");
+});
+
+test("applyCharacter: a pack larger than the cap uses its first anchors; overflow names the real room", () => {
+  const big = { id: "b", name: "Big Pack", identityBlock: null, referenceImages: Array.from({ length: 12 }, (_, i) => `https://m.example/p${i}.png`) };
+  assert.equal(applyCharacter("x", [], big, 9).referenceImages.length, 9);
+  assert.throws(() => applyCharacter("x", ["https://m.example/shirt.png"], big, 9), /fills all 9 reference slots/);
+  const amy = pickCharacter(TEAMS, "Amy");
+  const many = Array.from({ length: 8 }, (_, i) => `https://m.example/own${i}.png`);
+  assert.throws(() => applyCharacter("x", many, amy, 9), /uses 2 reference image\(s\).*at most 7 of your own \(got 8\)/);
+  assert.equal(applyCharacter("x", many.slice(0, 7), amy, 9).referenceImages.length, 9);
 });
 
 test("applyCharacter: character anchors first, caller refs after, deduped; identity text once", () => {
@@ -92,6 +116,20 @@ test("applyCharacter: character anchors first, caller refs after, deduped; ident
   assert.deepEqual(out.referenceImages, ["https://m.example/amy1.png", "https://m.example/amy2.png", "https://m.example/shirt.png"]);
   assert.equal(out.prompt, "Amy wearing the shirt, facing forward\n\nAmy: 27, auburn bob, freckles.");
   assert.equal(applyCharacter(out.prompt, [], ch).prompt, out.prompt);
+});
+
+test("buildServer loaded through embed defaults to REMOTE mode: no local file reads, no operator tools", async () => {
+  const names = (await toolsOf(undefined, { PRINTFUL_API_TOKEN: "x", AETHERWAVE_ADMIN_TOOLS: "1" })).map((t) => t.name);
+  assert.ok(!names.includes("aetherwave_printful_list_products"));
+  assert.ok(!names.includes("aetherwave_shop_create_listing"));
+  const server = buildServer(new AetherwaveClient({ apiKey: "aw_live_test", baseUrl: "http://127.0.0.1:9" }));
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "t", version: "0" });
+  await Promise.all([server.connect(a), c.connect(b)]);
+  const r = await c.callTool({ name: "aetherwave_upload_to_gallery", arguments: { filePath: "C:/Windows/win.ini" } });
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /cannot read files on your computer/);
+  await c.close();
 });
 
 // ── embedded session against a fake platform ────────────────────────────────
@@ -189,4 +227,14 @@ test("generate_video refuses a reference URL that resolves to a private address 
   }
   assert.ok(!seen.some((x) => x.url === "/api/generate-video"));
   await s.close();
+});
+
+test("getPinned connects to the CHECKED address, not a fresh DNS answer (rebinding guard)", async () => {
+  seen = [];
+  const port = new URL(base).port;
+  // a hostname that does not resolve at all: only the pinned address can reach the fake platform
+  const r = await getPinned(new URL(`http://rebind.invalid:${port}/api/quickstart/balance`), "127.0.0.1", 4);
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).credits, 1234);
+  assert.equal(seen[0].headers.host, `rebind.invalid:${port}`);
 });

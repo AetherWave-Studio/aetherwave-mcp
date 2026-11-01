@@ -30,7 +30,7 @@ import { registerComicTools } from "./comic.js";
 import { registerMerchTools } from "./merch.js";
 import { fetchPublic, registerGalleryTools } from "./gallery.js";
 import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
-import { CHARACTER_DEFAULT_IMAGE_MODEL, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
+import { CHARACTER_DEFAULT_IMAGE_MODEL, IMAGE_MAX_REFERENCES, VIDEO_MAX_REFERENCES, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
  * while the package shipped 0.2.9, so every client was told the wrong version at
@@ -177,7 +177,9 @@ export function buildServer(
    *  pass false. Defaults to "not the remote HTTP host". */
   opts: { local?: boolean } = {},
 ): McpServer {
-  const local = opts.local ?? !process.env.AETHERWAVE_MCP_HTTP;
+  // Loaded through ./embed.js, the default is REMOTE: a host that forgets the
+  // option must never let a member read the server's own files.
+  const local = opts.local ?? (!process.env.AETHERWAVE_MCP_HTTP && !(globalThis as any).__aetherwaveMcpEmbedded);
   const server = new McpServer({
     name: "aetherwave",
     version: VERSION,
@@ -547,7 +549,7 @@ Ask the user only when:
         let character: ResolvedCharacter | null = null;
         if (args.character) {
           character = await resolveCharacter(client, args.character);
-          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character));
+          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character, IMAGE_MAX_REFERENCES));
         }
         const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-image",
@@ -1143,10 +1145,7 @@ Ask the user only when:
             return errorResult(new Error("character and imageUrl cannot be combined: a starting frame drops the character's reference images. Pass character alone (plus referenceImages if you need more anchors)."));
           }
           character = await resolveCharacter(client, args.character);
-          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character));
-          if (referenceImages.length > 9) {
-            return errorResult(new Error(`${character.name} brings ${character.referenceImages.length} reference images and the engine takes 9 in total, so pass at most ${9 - character.referenceImages.length} of your own.`));
-          }
+          ({ prompt, referenceImages } = applyCharacter(prompt, referenceImages, character, VIDEO_MAX_REFERENCES));
         }
         if (args.imageUrl && args.referenceImages?.length) {
           return errorResult(
