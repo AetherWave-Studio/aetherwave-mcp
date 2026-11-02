@@ -6,7 +6,7 @@
 
 Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.com). Drop it into any MCP-compatible client (Claude Code, Cursor, Continue, Claude Desktop, custom agents) and your LLM can generate, edit, upscale, reframe, and master across every flagship creative AI provider through one API key, one credit pool.
 
-One install. One token. Thirty-three default tools covering:
+One install. One token. Thirty-five default tools covering:
 
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Nano Banana 2, Flux 2, Qwen Image, Z-Image Turbo
@@ -15,6 +15,7 @@ One install. One token. Thirty-three default tools covering:
 - **Video** - Grok Imagine (KIE+fal fallback), Wan 2.7, Hailuo 02, Seedance Pro/Lite, Kling 2.6 (audio), VEO 3.1, Happy Horse
 - **Video utility** - Atlas upscaler (1080p/2K), rembg u2netp background removal, Luma Ray 2 Flash reframe
 - **Audio mastering** - 12 genre/style presets via the AetherWave Python service
+- **Voiceover** - text to speech in 9 voices on Fish Audio, 5 credits per 1,000 characters
 - **Gallery** - upload your own images, audio and video (local file, URL or data URL), and a paginated list of your saved creations
 - **User manuals** - the MCP, Graphic Novel Studio, UGC Studio and Project Studio manuals as PDF links (saved to Downloads on the npx server)
 - **Comic books** - 9 tools driving the AetherWave Graphic Novel Engine end to end: cast, character references, script, panels, lettered pages, and a PDF / EPUB / CBZ download link
@@ -120,6 +121,8 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_list_my_creations` | Paginated gallery read for chained workflows |
 | `aetherwave_upload_to_gallery` | Put your own image, audio or video into your gallery from a local file (npx only), a URL or a data URL. Free, counts against storage, up to 95 MB |
 | `aetherwave_get_user_manual` | Link to a user manual PDF (`mcp`, `graphic-novel`, `ugc-studio`, `project-studio`); on the npx server also saves it to Downloads |
+| `aetherwave_generate_speech` | Voiceover MP3 from text on Fish Audio, 9 voices. 5 cr per 1,000 characters, min 2, up to 1,000 characters a call |
+| `aetherwave_list_voices` | The voiceover voices with descriptions, the price and the per-call limit. Free |
 | `aetherwave_comic_estimate` | Free quote for a comic: script + panel credits for a page count |
 | `aetherwave_comic_create` | Create a comic project (title, premise, cast, art style). Free |
 | `aetherwave_comic_character_reference` | Generate (6 cr each) or approve a character's reference image |
@@ -575,6 +578,27 @@ The download link for a user manual PDF. On the npx server it also saves the PDF
 
 **Returns:** `{ manual, title, url, savedTo?, sizeBytes? }`
 
+### `aetherwave_generate_speech`
+
+Turns text into a spoken MP3 on Fish Audio (s2.1-pro): narration, an ad read, a podcast intro, a character line. Synchronous on the platform, usually a few seconds. Charged when the audio is delivered; saved to the gallery as audio. The tool reads the exact price from `POST /api/v1/audio/speech/estimate` first, so an unknown voice or a too-long text fails before anything is spent.
+
+| Param | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `text` | string | yes | - | Up to 1,000 characters (about a minute of speech). Split longer scripts at sentence ends. [bracketed] directions like [excited] are performed |
+| `voice` | string | no | `sarah` | `jessica`, `laura`, `katie`, `sarah`, `liam`, `eric`, `roger`, `brian`, `bill` |
+| `maxCredits` | int | no | - | Refuse (nothing charged) if the price is higher |
+| `wait` | boolean | no | false | Wait up to 3 minutes instead of ~45 s |
+
+Price: 5 credits per 1,000 characters, minimum 2, billed per UTF-8 byte (plain English is one byte per character; accented and non-Latin text costs up to 3x).
+
+**Returns:** `{ success, audioUrl, voice, durationSec, creationId, creditsUsed, creditsRemaining }`. If the call outlives ~45 s you get `state: "running"`; the voiceover lands in `aetherwave_list_my_creations` type `audio`. Do not resubmit.
+
+Why Fish: ElevenLabs' terms do not allow reselling its output to MCP users, so no tool here calls ElevenLabs.
+
+### `aetherwave_list_voices`
+
+Free. The 9 voices with a short description, the default voice, the price and the per-call limit.
+
 ### `aetherwave_list_my_creations`
 
 Paginated gallery read. Useful for chaining ("reframe my last 5 images to 9:16").
@@ -746,6 +770,7 @@ Typical costs:
 - **Video** - 4 cr/sec (Grok Imagine at 480p) up to 143 cr/sec (Seedance 2 at 1080p); VEO 3.1 is a fixed 42 / 84 / 350 cr per 8 s clip
 - **Music** - 20 cr per generation (2 tracks)
 - **Mastering** - 20 cr/track (free on Artist / Producer / Mogul / Ultimate)
+- **Voiceover** - 5 cr per 1,000 characters, minimum 2
 - **Comic books** - 9 cr a panel (charged on success), 6 cr a character reference, script charged on use (about 40 cr for 12 pages). A 12-page, 27-panel book cost 301 cr
 
 See live pricing at https://aetherwavestudio.com/buy-credits or via `aetherwave_list_*_models`.
@@ -793,7 +818,9 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
 
-**0.4.0** (unreleased): `character` on `aetherwave_generate_image` and `aetherwave_generate_video` (one of your UGC characters by name). Image count: `generate_image` now sends `maxImages`, the field the platform reads (`numImages`, which no model read, is kept as an alias). A reference URL that resolves to a private address is refused. New `@aetherwave-studio/mcp/embed` entry for hosting the tools inside another server (see Embedding).
+**0.5.0**: `aetherwave_generate_speech` and `aetherwave_list_voices`, voiceover on Fish Audio (9 voices, 5 credits per 1,000 characters). 35 default tools.
+
+**0.4.0**: `character` on `aetherwave_generate_image` and `aetherwave_generate_video` (one of your UGC characters by name). Image count: `generate_image` now sends `maxImages`, the field the platform reads (`numImages`, which no model read, is kept as an alias). A reference URL that resolves to a private address is refused. New `@aetherwave-studio/mcp/embed` entry for hosting the tools inside another server (see Embedding).
 
 **0.3.1** (unreleased, folded into 0.4.0): `aetherwave_upload_to_gallery` and `aetherwave_get_user_manual`, 33 default tools.
 
