@@ -52,6 +52,7 @@ export const TOOL_POLICY: Readonly<Record<string, ToolPolicy>> = Object.freeze({
   aetherwave_merch_mockup_status: READ,
   // Reads a manual; the local server can also save a PDF to the caller's disk (embedders pass saveTo "none").
   aetherwave_get_user_manual: READ,
+  aetherwave_list_voices: READ,
 
   // image
   aetherwave_generate_image: { charge: "credits", effect: "create", embed: true, quote: "platform image pricing (POST /api/generate-image), per image" },
@@ -69,6 +70,7 @@ export const TOOL_POLICY: Readonly<Record<string, ToolPolicy>> = Object.freeze({
   // audio
   aetherwave_generate_music: { charge: "credits", effect: "create", embed: true, quote: "calculateMusicCredits (POST /api/generate-music)" },
   aetherwave_master_audio: { charge: "credits", effect: "create", embed: true, quote: "mastering price (POST /api/master-audio); 0 on plans that include it" },
+  aetherwave_generate_speech: { charge: "credits", effect: "create", embed: true, quote: "POST /api/v1/audio/speech/estimate (fishSpeechCredits: 5 per 1,000 UTF-8 bytes, minimum 2)" },
 
   // comics
   aetherwave_comic_create: { charge: "none", effect: "create", embed: true },

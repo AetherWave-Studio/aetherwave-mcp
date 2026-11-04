@@ -29,6 +29,7 @@ import {
 import { registerComicTools } from "./comic.js";
 import { registerMerchTools } from "./merch.js";
 import { fetchPublic, registerGalleryTools } from "./gallery.js";
+import { registerAudioTools } from "./audio.js";
 import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
 import { CHARACTER_DEFAULT_IMAGE_MODEL, IMAGE_MAX_REFERENCES, VIDEO_MAX_REFERENCES, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
 
@@ -293,7 +294,7 @@ kind picks the pipeline, and every tool names the kind it returns:
 - "music": generate_music
 - "merch-mockup": merch_mockup (taskId = its taskKey)
 - "comic-export": comic_export (taskId = its exportId; projectId required)
-Comic script/draw/assemble progress is per project, not per task: use aetherwave_comic_status. master_audio has no job id (the call itself is the job); a mastered track that outlived the call is in aetherwave_list_my_creations type "audio".`,
+Comic script/draw/assemble progress is per project, not per task: use aetherwave_comic_status. master_audio and generate_speech have no job id (the call itself is the job); a track or voiceover that outlived the call is in aetherwave_list_my_creations type "audio".`,
       inputSchema: {
         taskId: z.string().describe("The taskId (or taskKey / exportId) a tool returned."),
         kind: z
@@ -1487,6 +1488,9 @@ Ask the user only when:
 
   // ─── gallery upload + user manuals (local file paths and saving to disk only on npx) ──
   registerGalleryTools(server, client, { local });
+
+  // ─── voiceover on Fish Audio (0.5.0) ──
+  registerAudioTools(server, client);
 
   return server;
 }

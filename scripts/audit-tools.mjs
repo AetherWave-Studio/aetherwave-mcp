@@ -201,6 +201,11 @@ await audit("aetherwave_generate_music", { prompt: "lo-fi hip hop, warm, short",
 await audit("aetherwave_master_audio", { audioUrl: sourceAudio?.contentUrl, preset: "streaming", trackTitle: "MCP audit master" }, {
   est: 20, check: (b) => (b.masteredUrl || b.state === "running" ? null : "no masteredUrl"), skip: sourceAudio ? null : "not run (no short mp3 in gallery)",
 });
+// Voiceover on Fish (0.5.0): one short line is the 2-credit minimum.
+await audit("aetherwave_list_voices", {}, { check: (b) => (Array.isArray(b.voices) && b.voices.length >= 9 ? null : "fewer than 9 voices") });
+await audit("aetherwave_generate_speech", { text: "AetherWave MCP audit, voiceover check.", voice: "eric", maxCredits: 2 }, {
+  est: 2, check: (b) => (b.audioUrl || b.state === "running" ? null : "no audioUrl"),
+});
 
 // ─── comic (free paths on the finished demo book; paid steps budget-gated) ─
 const est = await audit("aetherwave_comic_estimate", { pageCount: 12 }, { check: (b) => (typeof b.totalCredits === "number" ? null : "no totalCredits") });
