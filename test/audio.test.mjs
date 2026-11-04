@@ -8,7 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { registerAudioTools } from "../dist/audio.js";
 import { AetherwaveClient } from "../dist/api.js";
 
-let platform, base, calls, speechDelayMs;
+let platform, base, calls, speechDelayMs, estimateShape;
 before(async () => {
   platform = http.createServer((req, res) => {
     const chunks = [];
@@ -21,6 +21,8 @@ before(async () => {
         return send(200, { success: true, data: { defaultVoice: "sarah", voices: [{ voice: "sarah", name: "Sarah" }], maxChars: 1000 } });
       }
       if (req.method === "POST" && req.url === "/api/v1/audio/speech/estimate") {
+        if (estimateShape === "missing") return send(200, { success: true, data: { voice: body.voice } });
+        if (estimateShape === "null") return send(200, { success: true, data: { estimatedCredits: null, voice: body.voice } });
         if (body.voice === "nova") return send(400, { success: false, error: 'Unknown voice "nova". Voices: sarah, eric.' });
         return send(200, { success: true, data: { estimatedCredits: Math.max(2, Math.ceil(Buffer.byteLength(body.text) * 0.005)), voice: body.voice } });
       }
@@ -42,6 +44,7 @@ after(() => platform.close());
 async function connect() {
   calls = [];
   speechDelayMs = 0;
+  estimateShape = "normal";
   const server = new McpServer({ name: "t", version: "0" });
   registerAudioTools(server, new AetherwaveClient({ apiKey: "aw_live_test", baseUrl: base }));
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -101,4 +104,29 @@ test("list_voices returns the platform's voice data", async () => {
   const r = await call(c, "aetherwave_list_voices", {});
   assert.equal(r.isError, false, r.text);
   assert.equal(JSON.parse(r.text).defaultVoice, "sarah");
+});
+
+test("maxCredits fails CLOSED: an estimate with no price field makes no paid call", async () => {
+  const c = await connect();
+  estimateShape = "missing";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there", maxCredits: 5 });
+  assert.equal(r.isError, true);
+  assert.match(r.text, /did not return a price.*Nothing was charged/);
+  assert.deepEqual(calls.map((x) => x.url), ["/api/v1/audio/speech/estimate"]);
+});
+
+test("maxCredits fails CLOSED on a null price too (Number(null) would read as 0)", async () => {
+  const c = await connect();
+  estimateShape = "null";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there", maxCredits: 5 });
+  assert.equal(r.isError, true);
+  assert.ok(!calls.some((x) => x.url === "/api/v1/audio/speech"));
+});
+
+test("without maxCredits a missing price does not block the call", async () => {
+  const c = await connect();
+  estimateShape = "missing";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
+  assert.equal(r.isError, false, r.text);
+  assert.deepEqual(calls.map((x) => x.url), ["/api/v1/audio/speech/estimate", "/api/v1/audio/speech"]);
 });

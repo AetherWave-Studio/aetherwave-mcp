@@ -580,13 +580,13 @@ The download link for a user manual PDF. On the npx server it also saves the PDF
 
 ### `aetherwave_generate_speech`
 
-Turns text into a spoken MP3 on Fish Audio (s2.1-pro): narration, an ad read, a podcast intro, a character line. Synchronous on the platform, usually a few seconds. Charged when the audio is delivered; saved to the gallery as audio. The tool reads the exact price from `POST /api/v1/audio/speech/estimate` first, so an unknown voice or a too-long text fails before anything is spent.
+Turns text into a spoken MP3 on Fish Audio (s2.1-pro): narration, an ad read, a podcast intro, a character line. Synchronous on the platform, usually a few seconds. Charged when the request is accepted, refunded automatically if no audio is delivered; saved to the gallery as audio. The tool reads the exact price from `POST /api/v1/audio/speech/estimate` first, so an unknown voice or a too-long text fails before anything is spent.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
 | `text` | string | yes | - | Up to 1,000 characters (about a minute of speech). Split longer scripts at sentence ends. [bracketed] directions like [excited] are performed |
 | `voice` | string | no | `sarah` | `jessica`, `laura`, `katie`, `sarah`, `liam`, `eric`, `roger`, `brian`, `bill` |
-| `maxCredits` | int | no | - | Refuse (nothing charged) if the price is higher |
+| `maxCredits` | int | no | - | Refuse (nothing charged) if the price is higher, or if the platform returns no price |
 | `wait` | boolean | no | false | Wait up to 3 minutes instead of ~45 s |
 
 Price: 5 credits per 1,000 characters, minimum 2, billed per UTF-8 byte (plain English is one byte per character; accented and non-Latin text costs up to 3x).
