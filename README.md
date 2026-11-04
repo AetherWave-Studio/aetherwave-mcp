@@ -593,8 +593,6 @@ Price: 5 credits per 1,000 characters, minimum 2, billed per UTF-8 byte (plain E
 
 **Returns:** `{ success, audioUrl, voice, durationSec, creationId, creditsUsed, creditsRemaining }`. If the call outlives ~45 s you get `state: "running"`; the voiceover lands in `aetherwave_list_my_creations` type `audio`. Do not resubmit.
 
-Why Fish: ElevenLabs' terms do not allow reselling its output to MCP users, so no tool here calls ElevenLabs.
-
 ### `aetherwave_list_voices`
 
 Free. The 9 voices with a short description, the default voice, the price and the per-call limit.

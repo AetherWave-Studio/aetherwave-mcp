@@ -8,9 +8,7 @@
  *    the same function the route charges with, so `maxCredits` can refuse before anything is spent.
  *  - aetherwave_list_voices: GET /api/v1/audio/voices.
  *
- * Why Fish and only Fish (Andrew 2026-11-01): ElevenLabs' Prohibited Use Policy 9(c)/9(n) rules out
- * reselling its output to MCP users, and the platform's resale registry marks OpenAI TTS restricted.
- * So this file never calls /api/tts/generate (OpenAI + ElevenLabs) or /api/v1/audio/sfx (ElevenLabs).
+ * Fish only (Andrew 2026-11-01): this file never calls /api/tts/generate or /api/v1/audio/sfx.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
