@@ -31,6 +31,7 @@ import { registerMerchTools } from "./merch.js";
 import { fetchPublic, registerGalleryTools } from "./gallery.js";
 import { registerAudioTools } from "./audio.js";
 import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
+import { musicRequestBody } from "./music-body.js";
 import { CHARACTER_DEFAULT_IMAGE_MODEL, IMAGE_MAX_REFERENCES, VIDEO_MAX_REFERENCES, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
@@ -1216,7 +1217,7 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate music (Suno)",
       description:
-        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. Note: the `title` param is advisory for instrumentals - Suno often writes its own title from the prompt content for instrumental generations. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version." + RETURNS_NOTE,
+        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. A `title` is honoured with lyrics, and on an instrumental whose description fits the model style cap (200 chars on V3_5/V4, 1000 otherwise); a vocal song without lyrics is named by Suno. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version." + RETURNS_NOTE,
       inputSchema: {
         prompt: z
           .string()
@@ -1234,7 +1235,9 @@ Ask the user only when:
         title: z
           .string()
           .optional()
-          .describe("Optional title for the generated tracks."),
+          .describe(
+            "Optional title for the generated tracks. Used with lyrics (defaults to the start of the description) and on instrumentals. A vocal song without lyrics gets a title from Suno instead.",
+          ),
         lyrics: z
           .string()
           .optional()
@@ -1250,15 +1253,16 @@ Ask the user only when:
          * "stick closer to that style", and the model picks a parameter based on
          * nothing but the sentence below. So each one is phrased in the language
          * a person actually uses, not in the vendor's terms.
-         * All four apply only when lyrics are supplied (custom mode); the API
-         * ignores them otherwise. */
+         * All four apply only in custom mode (lyrics supplied, or a titled
+         * instrumental, which takes all but audioWeight); the API ignores them
+         * otherwise. */
         styleWeight: z
           .number()
           .min(0)
           .max(1)
           .optional()
           .describe(
-            "0 to 1. How closely to follow the style description. Higher sticks to it, lower lets the model roam. Use when someone asks to stay closer to, or further from, a described sound. Only applies with lyrics.",
+            "0 to 1. How closely to follow the style description. Higher sticks to it, lower lets the model roam. Use when someone asks to stay closer to, or further from, a described sound. Only applies with lyrics or on a titled instrumental.",
           ),
         weirdnessConstraint: z
           .number()
@@ -1266,7 +1270,7 @@ Ask the user only when:
           .max(1)
           .optional()
           .describe(
-            "0 to 1. How experimental the result is. Higher is stranger and more unexpected, lower is safer and more conventional. Use when someone asks to make it weirder or more normal. Only applies with lyrics.",
+            "0 to 1. How experimental the result is. Higher is stranger and more unexpected, lower is safer and more conventional. Use when someone asks to make it weirder or more normal. Only applies with lyrics or on a titled instrumental.",
           ),
         audioWeight: z
           .number()
@@ -1280,57 +1284,16 @@ Ask the user only when:
           .string()
           .optional()
           .describe(
-            "Comma-separated things to AVOID, e.g. 'heavy metal, screaming, distorted guitar'. Use when someone says they do not want a particular sound. Only applies with lyrics.",
+            "Comma-separated things to AVOID, e.g. 'heavy metal, screaming, distorted guitar'. Use when someone says they do not want a particular sound. Only applies with lyrics or on a titled instrumental.",
           ),
         ...waitArgs,
       },
     },
     async (args) => {
       try {
-        /* THE API OVERLOADS `prompt`, AND THIS TOOL HAS TO TRANSLATE.
-         *
-         * /api/generate-music destructures exactly:
-         *   prompt, model, instrumental, vocalGender, customMode, title, style
-         *
-         * There is NO `lyrics` field, and `title` is read ONLY when customMode
-         * is true. This tool used to send { prompt, instrumental, model, title,
-         * lyrics }, so lyrics AND title were silently discarded and every
-         * generation ran in simple mode. Reported 2026-08-11 by a developer who
-         * could not reproduce a Music Studio request from the package.
-         *
-         * What `prompt` MEANS depends on the mode:
-         *   customMode false -> prompt is a DESCRIPTION of the song
-         *   customMode true  -> prompt is the LITERAL LYRICS, and `style`
-         *                       carries the musical direction
-         *
-         * The tool's own arguments stay intuitive (description in `prompt`,
-         * words in `lyrics`) and this adapter maps them onto that contract.
-         * Do not "simplify" it back to passing args straight through. */
-        const hasLyrics = !!(args.lyrics && args.lyrics.trim());
-        const submitBody = hasLyrics
-          ? {
-              customMode: true,
-              prompt: args.lyrics!.trim(),   // custom mode: prompt IS the lyrics
-              style: args.prompt,            // ...so the description becomes style
-              title: args.title,             // only honoured in custom mode
-              vocalGender: args.vocalGender ?? "m",
-              instrumental: args.instrumental ?? false,
-              model: args.model || "V5_5",
-              /* Sent only when given. `!= null` rather than truthiness because 0
-                 is a MEANINGFUL value on all three weights - `args.styleWeight &&`
-                 would silently discard a deliberate zero, which is the same
-                 silent-drop this whole tool was fixed for. */
-              ...(args.styleWeight != null ? { styleWeight: args.styleWeight } : {}),
-              ...(args.weirdnessConstraint != null ? { weirdnessConstraint: args.weirdnessConstraint } : {}),
-              ...(args.audioWeight != null ? { audioWeight: args.audioWeight } : {}),
-              ...(args.negativeTags ? { negativeTags: args.negativeTags } : {}),
-            }
-          : {
-              customMode: false,
-              prompt: args.prompt,           // simple mode: prompt is the description
-              instrumental: args.instrumental ?? false,
-              model: args.model || "V5_5",
-            };
+        /* The API overloads `prompt` and reads `title` only in custom mode;
+         * musicRequestBody (src/music-body.ts) owns that translation. */
+        const submitBody = musicRequestBody(args);
 
         const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/generate-music",
