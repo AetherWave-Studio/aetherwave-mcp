@@ -816,6 +816,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
 
+**0.5.1**: `aetherwave_generate_music` sends `title` on an instrumental (it was dropped, and Suno named the track itself), and a lyric request without a title no longer fails with "Title and Style are required in Custom Mode" (the title defaults to the start of the description).
+
 **0.5.0**: `aetherwave_generate_speech` and `aetherwave_list_voices`, voiceover on Fish Audio (9 voices, 5 credits per 1,000 characters). 35 default tools.
 
 **0.4.0**: `character` on `aetherwave_generate_image` and `aetherwave_generate_video` (one of your UGC characters by name). Image count: `generate_image` now sends `maxImages`, the field the platform reads (`numImages`, which no model read, is kept as an alias). A reference URL that resolves to a private address is refused. New `@aetherwave-studio/mcp/embed` entry for hosting the tools inside another server (see Embedding).

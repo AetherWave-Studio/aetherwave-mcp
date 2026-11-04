@@ -198,6 +198,16 @@ await audit("aetherwave_generate_music", { prompt: "lo-fi hip hop, warm, short",
     return titles.some((t) => t === TITLE) ? null : `custom-mode title not honoured: got ${JSON.stringify(titles)}`;
   },
 });
+// 0.5.1: a titled instrumental goes custom mode, so the title must come back.
+const ITITLE = "MCP Audit Instrumental";
+await audit("aetherwave_generate_music", { prompt: "ambient synth pads, slow, calm", instrumental: true, title: ITITLE, model: "V4_5" }, {
+  est: 20, followKind: "music",
+  check: (b) => {
+    const titles = (b.tracks || []).map((t) => t.title);
+    if (!titles.length) return "no tracks";
+    return titles.some((t) => t === ITITLE) ? null : `instrumental title not honoured: got ${JSON.stringify(titles)}`;
+  },
+});
 await audit("aetherwave_master_audio", { audioUrl: sourceAudio?.contentUrl, preset: "streaming", trackTitle: "MCP audit master" }, {
   est: 20, check: (b) => (b.masteredUrl || b.state === "running" ? null : "no masteredUrl"), skip: sourceAudio ? null : "not run (no short mp3 in gallery)",
 });
