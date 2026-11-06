@@ -8,7 +8,7 @@ Model Context Protocol server for [AetherWave Studio](https://aetherwavestudio.c
 
 One install. One token. Thirty-five default tools covering:
 
-- **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5
+- **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5 / V6
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Nano Banana 2, Flux 2, Qwen Image, Z-Image Turbo
 - **Image edit** - Grok Imagine I2I, Seedream V4 Edit, Flux Kontext, Wan 2.5 Spicy, Qwen Edit, GPT Image 1.5
 - **Image utility** - 2x / 4x upscale, Recraft background removal (with fal BiRefNet v2 fallback), Ideogram V3 Reframe
@@ -109,7 +109,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_list_master_presets` | Enumerate the 12 mastering presets with target LUFS, tags, descriptions |
 | `aetherwave_generate_image` | T2I or I2I across 8+ models. Default `grok-imagine-t2i` (6 cr, 2 outputs) |
 | `aetherwave_generate_video` | T2V or I2V across 7+ model families. Native audio, reference-image identity lock, async submit |
-| `aetherwave_generate_music` | Suno V5.5 by default. Two tracks per submission, lyrics + instrumental |
+| `aetherwave_generate_music` | Suno V6 by default. Two tracks per submission, lyrics + instrumental |
 | `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (10 cr, one image) |
 | `aetherwave_upscale_image` | 2x or 4x upscale, 4 cr |
 | `aetherwave_reframe_image` | Ideogram V3 Reframe to a new aspect ratio (outpaints edges) |
@@ -420,7 +420,7 @@ Suno music generation. Two tracks per submission.
 |-------|------|----------|---------|-------|
 | `prompt` | string | yes | - | Style/mood/topic description |
 | `instrumental` | boolean | no | `false` | If true, no vocals |
-| `model` | enum | no | `V5_5` | `V3_5`, `V4`, `V4_5`, `V5`, `V5_5` |
+| `model` | enum | no | `V6` | `V3_5`, `V4`, `V4_5`, `V5`, `V5_5`, `V6` |
 | `title` | string | no | - | Optional title for the tracks |
 | `lyrics` | string | no | - | Custom lyrics, omit to let Suno write them |
 

@@ -46,7 +46,7 @@ export interface MusicArgs {
 /**
  * The longest `style` Suno takes in custom mode for a model (mirrors the
  * platform's sunoStyleLimit in server/chat-llm-actions.ts).
- * @param model Suno model id, e.g. "V5_5"
+ * @param model Suno model id, e.g. "V6"
  * @returns the character cap
  */
 export function sunoStyleLimit(model: string): number {
@@ -72,7 +72,7 @@ function tuning(args: MusicArgs, withAudioWeight: boolean): Record<string, unkno
  * @returns the body to POST
  */
 export function musicRequestBody(args: MusicArgs): Record<string, unknown> {
-  const model = args.model || "V5_5";
+  const model = args.model || "V6";
   const lyrics = args.lyrics?.trim();
   const title = args.title?.trim();
   const instrumental = args.instrumental ?? false;
