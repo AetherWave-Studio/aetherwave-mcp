@@ -1217,7 +1217,7 @@ Ask the user only when:
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       title: "Generate music (Suno)",
       description:
-        "Generates AI music via Suno. Returns two tracks per submission. Default model is V5.5 (newest, best quality). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. A `title` is honoured with lyrics, and on an instrumental whose description fits the model style cap (200 chars on V3_5/V4, 1000 otherwise); a vocal song without lyrics is named by Suno. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version." + RETURNS_NOTE,
+        "Generates AI music via Suno. Returns two tracks per submission. Default model is V6 (newest, best quality, the same default as the website). For instrumental output set `instrumental: true`. Music gen typically takes 30-90s - this tool polls with up to a 6-minute budget. A `title` is honoured with lyrics, and on an instrumental whose description fits the model style cap (200 chars on V3_5/V4, 1000 otherwise); a vocal song without lyrics is named by Suno. Transient `GENERATE_AUDIO_FAILED` errors are common; retry once before degrading the model version." + RETURNS_NOTE,
       inputSchema: {
         prompt: z
           .string()
@@ -1229,9 +1229,9 @@ Ask the user only when:
           .optional()
           .describe("If true, no vocals. Default false."),
         model: z
-          .enum(["V3_5", "V4", "V4_5", "V5", "V5_5"])
+          .enum(["V3_5", "V4", "V4_5", "V5", "V5_5", "V6"])
           .optional()
-          .describe("Suno model version. Defaults to V5_5 (current best)."),
+          .describe("Suno model version. Defaults to V6 (current best). All versions cost the same 20 credits."),
         title: z
           .string()
           .optional()

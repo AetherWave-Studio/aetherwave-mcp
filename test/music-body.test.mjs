@@ -8,7 +8,7 @@ import { musicRequestBody, sunoStyleLimit } from "../dist/music-body.js";
 test("a titled instrumental goes custom with the description as style", () => {
   assert.deepEqual(
     musicRequestBody({ prompt: "dark synthwave", instrumental: true, title: "Neon Rain" }),
-    { customMode: true, style: "dark synthwave", title: "Neon Rain", instrumental: true, model: "V5_5" },
+    { customMode: true, style: "dark synthwave", title: "Neon Rain", instrumental: true, model: "V6" },
   );
 });
 
@@ -27,12 +27,12 @@ test("an instrumental whose description exceeds the model style cap stays simple
   const body = musicRequestBody({ prompt, instrumental: true, title: "T", model: "V4" });
   assert.equal(body.customMode, false);
   assert.equal("title" in body, false);
-  assert.equal(musicRequestBody({ prompt, instrumental: true, title: "T", model: "V5_5" }).customMode, true);
+  assert.equal(musicRequestBody({ prompt, instrumental: true, title: "T", model: "V6" }).customMode, true);
 });
 
 test("an untitled instrumental and a vocal song without lyrics stay simple", () => {
   assert.deepEqual(musicRequestBody({ prompt: "lofi", instrumental: true }), {
-    customMode: false, prompt: "lofi", instrumental: true, model: "V5_5",
+    customMode: false, prompt: "lofi", instrumental: true, model: "V6",
   });
   assert.equal(musicRequestBody({ prompt: "pop", title: "Hit" }).customMode, false);
 });
