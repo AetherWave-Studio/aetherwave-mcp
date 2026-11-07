@@ -5,10 +5,10 @@ import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { registerAudioTools } from "../dist/audio.js";
+import { registerAudioTools, SPEECH_DEADLINE_MS } from "../dist/audio.js";
 import { AetherwaveClient } from "../dist/api.js";
 
-let platform, base, calls, speechDelayMs, estimateShape;
+let platform, base, calls, speechDelayMs, estimateShape, speechMode;
 before(async () => {
   platform = http.createServer((req, res) => {
     const chunks = [];
@@ -27,6 +27,10 @@ before(async () => {
         return send(200, { success: true, data: { estimatedCredits: Math.max(2, Math.ceil(Buffer.byteLength(body.text) * 0.005)), voice: body.voice } });
       }
       if (req.method === "POST" && req.url === "/api/v1/audio/speech") {
+        if (speechMode === "refunded") return send(504, { success: false, error: "Voiceover timed out. Try a shorter text.", refunded: true });
+        if (speechMode === "refund-failed") return send(502, { success: false, error: "Voiceover failed at the provider. Try again.", refunded: false });
+        if (speechMode === "proxy") { res.writeHead(502, { "Content-Type": "text/html" }); return res.end("<html>Bad Gateway</html>"); }
+        if (speechMode === "reset") return req.socket.destroy();
         return setTimeout(() => send(200, {
           success: true,
           data: { audioUrl: "https://media.example/s.mp3", voice: body.voice, durationSec: 3.1, creationId: "c9" },
@@ -45,6 +49,7 @@ async function connect() {
   calls = [];
   speechDelayMs = 0;
   estimateShape = "normal";
+  speechMode = "ok";
   const server = new McpServer({ name: "t", version: "0" });
   registerAudioTools(server, new AetherwaveClient({ apiKey: "aw_live_test", baseUrl: base }));
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -129,4 +134,44 @@ test("without maxCredits a missing price does not block the call", async () => {
   const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
   assert.equal(r.isError, false, r.text);
   assert.deepEqual(calls.map((x) => x.url), ["/api/v1/audio/speech/estimate", "/api/v1/audio/speech"]);
+});
+
+test("the speech deadline outlasts the platform's 45 s Fish timeout and stays inside the 50 s tool contract", () => {
+  assert.ok(SPEECH_DEADLINE_MS > 45_000 && SPEECH_DEADLINE_MS <= 50_000, String(SPEECH_DEADLINE_MS));
+});
+
+test("a route failure says whether the charge was refunded (refunded: true)", async () => {
+  const c = await connect();
+  speechMode = "refunded";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
+  assert.equal(r.isError, true);
+  const out = JSON.parse(r.text);
+  assert.equal(out.state, "failed"); assert.equal(out.refunded, true);
+  assert.match(out.error, /timed out/); assert.match(out.next, /refunded\. It is safe to try again/);
+});
+
+test("a failed refund is surfaced, never reported as refunded", async () => {
+  const c = await connect();
+  speechMode = "refund-failed";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
+  const out = JSON.parse(r.text);
+  assert.equal(r.isError, true); assert.equal(out.state, "failed"); assert.equal(out.refunded, false);
+  assert.match(out.next, /refund did NOT go through\. Do not retry/);
+});
+
+test("a proxy error page mid-call is 'unknown' (may have been charged), not a failure", async () => {
+  const c = await connect();
+  speechMode = "proxy";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
+  const out = JSON.parse(r.text);
+  assert.equal(r.isError, true); assert.equal(out.state, "unknown"); assert.equal(out.checkWith, "aetherwave_list_my_creations");
+  assert.ok(!("refunded" in out)); assert.match(out.next, /Do NOT resubmit/);
+});
+
+test("a dropped connection mid-call is 'unknown' too", async () => {
+  const c = await connect();
+  speechMode = "reset";
+  const r = await call(c, "aetherwave_generate_speech", { text: "Hi there" });
+  const out = JSON.parse(r.text);
+  assert.equal(r.isError, true); assert.equal(out.state, "unknown");
 });
