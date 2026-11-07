@@ -189,7 +189,7 @@ await audit("aetherwave_reframe_video", { videoUrl: vUrl, reframeAspectRatio: "9
 
 // ─── music (custom mode, so title + lyrics are PROBED, not assumed) ────────
 const TITLE = "MCP Audit 0930";
-await audit("aetherwave_generate_music", { prompt: "lo-fi hip hop, warm, short", lyrics: "Neon lights on a quiet street\nWaveforms rolling to the beat", title: TITLE, vocalGender: "f", model: "V4_5" }, {
+await audit("aetherwave_generate_music", { prompt: "lo-fi hip hop, warm, short", lyrics: "Neon lights on a quiet street\nWaveforms rolling to the beat", title: TITLE, vocalGender: "f" } /* no model: probes the default (V6 since 0.5.2) */, {
   est: 20, followKind: "music",
   check: (b) => {
     const tracks = b.tracks || [];

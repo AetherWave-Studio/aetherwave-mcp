@@ -816,6 +816,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
 
+**0.5.2**: `aetherwave_generate_music` adds Suno `V6` and makes it the default (the website default too). Same 20 credits as every other version.
+
 **0.5.1**: `aetherwave_generate_music` sends `title` on an instrumental (it was dropped, and Suno named the track itself), and a lyric request without a title no longer fails with "Title and Style are required in Custom Mode" (the title defaults to the start of the description).
 
 **0.5.0**: `aetherwave_generate_speech` and `aetherwave_list_voices`, voiceover on Fish Audio (9 voices, 5 credits per 1,000 characters). 35 default tools.
