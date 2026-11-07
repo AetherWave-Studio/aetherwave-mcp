@@ -6,13 +6,13 @@
     "url": "https://github.com/AetherWave-Studio/aetherwave-mcp",
     "source": "github"
   },
-  "version": "0.5.2",
+  "version": "0.5.3",
   "websiteUrl": "https://aetherwavestudio.com/developers",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@aetherwave-studio/mcp",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "transport": {
         "type": "stdio"
       },
