@@ -49,6 +49,25 @@ export interface ApiClientOptions {
   allowRequest?: (method: "GET" | "POST", path: string) => boolean;
 }
 
+/** Credits a bundle adds, its bonus included. */
+export function totalCredits(b: any): number {
+  return (Number(b?.credits) || 0) + (Number(b?.bonusCredits) || 0);
+}
+
+/**
+ * The bundle to offer at a credit wall: the cheapest whose credits cover the shortfall; if none does, the
+ * biggest; with no shortfall known, the cheapest. Mirrors the platform's VoxBot picker (voxbot-topup.js).
+ * @param bundles the /api/credit-bundles list
+ * @param short   credits missing
+ */
+export function pickTopupPack(bundles: any[], short: number): any | null {
+  const list = (bundles || []).filter((b) => b && typeof b.id === "string" && /^[a-z0-9_-]{1,40}$/i.test(b.id) && totalCredits(b) > 0 && Number(b.priceUSD) > 0);
+  if (!list.length) return null;
+  list.sort((a, b) => Number(a.priceUSD) - Number(b.priceUSD));
+  const need = Number(short) > 0 ? Number(short) : 0;
+  return list.find((b) => totalCredits(b) >= need) ?? list.reduce((big, b) => (totalCredits(b) > totalCredits(big) ? b : big), list[0]);
+}
+
 export class AetherwaveClient {
   private readonly apiKey?: string;
   private readonly bearerToken?: string;
@@ -208,6 +227,30 @@ export class AetherwaveClient {
     return this.identity;
   }
 
+  /**
+   * The insufficient-credits message: the platform's own next step, then the RIGHT pack (the cheapest live
+   * bundle whose credits, bonus included, cover the shortfall) as a link that opens its checkout. The bundle
+   * list is the platform's public one; if it cannot be read, the message simply has no pack line. The link
+   * always points at the public site, never at a loopback base (VoxBot embeds this client).
+   * @param body the 402 body from respondInsufficientCredits
+   */
+  private async creditWallMessage(body: any): Promise<string> {
+    const lead = typeof body.next_step === "string" && body.next_step ? body.next_step : String(body.error || "Insufficient credits");
+    let packLine = "";
+    try {
+      const r = await fetch(this.url("GET", "/api/credit-bundles"), { signal: AbortSignal.timeout(3000) });
+      const list: any[] = r.ok ? await r.json() : [];
+      const pack = pickTopupPack(Array.isArray(list) ? list : [], Number(body.short));
+      if (pack) {
+        const site = /^https?:\/\/(localhost|127\.|\[::1\])/i.test(this.baseUrl) ? DEFAULT_BASE : this.baseUrl;
+        packLine = ` One tap to the right pack: ${totalCredits(pack).toLocaleString("en-US")} credits at ${site}/buy-credits?buy=${encodeURIComponent(pack.id)}`;
+      }
+    } catch {
+      /* no pack line */
+    }
+    return `Insufficient credits. ${lead}${packLine}`;
+  }
+
   private async handle<T>(res: Response, path: string): Promise<T> {
     if (!res.ok) {
       let body: any = null;
@@ -231,12 +274,18 @@ export class AetherwaveClient {
         typeof body === "object" && body && body.details
           ? ` (${body.details})`
           : "";
-      const message =
+      let message =
         typeof body === "object" && body && (body.error || body.message)
           ? `${body.error || body.message}${detail}`
           : typeof body === "string"
             ? body
             : `HTTP ${res.status}`;
+      /* Revenue phase 1, item 1 (2026-11-08): a credit wall is the moment a user wants to buy, and the model
+       * relaying this error is the only thing they read. respondInsufficientCredits sends next_step and the
+       * shortfall; surface both, plus a one-tap link to the right pack. */
+      if (res.status === 402 && typeof body === "object" && body && body.code === "insufficient_credits") {
+        message = await this.creditWallMessage(body);
+      }
       const err = new Error(
         `AetherWave API ${path} failed: ${res.status} - ${message}`,
       );
