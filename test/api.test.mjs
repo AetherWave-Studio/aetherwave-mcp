@@ -2,9 +2,14 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { AetherwaveClient } from "../dist/api.js";
+import { AetherwaveClient, pickTopupPack } from "../dist/api.js";
 
 let server, base, bytesWritten = 0;
+const BUNDLES = [
+  { id: "popular", credits: 1000, bonusCredits: 100, priceUSD: 11.99 },
+  { id: "starter", credits: 500, bonusCredits: 0, priceUSD: 5.99 },
+  { id: "artist", credits: 2000, bonusCredits: 300, priceUSD: 23.99 },
+];
 before(async () => {
   server = http.createServer((req, res) => {
     if (req.url === "/stream") {
@@ -17,6 +22,9 @@ before(async () => {
     }
     if (req.url === "/slow") return setTimeout(() => res.end("{}"), 2000);
     if (req.url === "/json") { res.writeHead(202, { "Content-Type": "application/json" }); return res.end('{"exportId":"e1"}'); }
+    if (req.url === "/wall") { res.writeHead(402, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ error: "Insufficient credits", code: "insufficient_credits", required: 20, available: 5, short: 15, topup_url: "https://aetherwavestudio.com/buy-credits", next_step: "You have 5 credits - this needs 20, so you are 15 short." })); }
+    if (req.url === "/bigwall") { res.writeHead(402, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ error: "Insufficient credits", code: "insufficient_credits", short: 1000, next_step: "Top up." })); }
+    if (req.url === "/api/credit-bundles") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(BUNDLES)); }
     if (req.url === "/api/quickstart/balance") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end('{"username":"alice","credits":5,"subscription_plan":"studio"}'); }
     res.writeHead(404, { "Content-Type": "application/json" }); res.end('{"error":"nope"}');
   });
@@ -186,4 +194,32 @@ test("control: a FAILED seen on two consecutive polls is a failure, with the ser
     (e) => /failed \(taskId=r1\): really failed/.test(e.message),
   );
   assert.equal(flap.twice, 2, "exactly one confirming poll");
+});
+
+test("a credit wall says the platform's next step and links the RIGHT pack, on the public site", async () => {
+  await assert.rejects(client().request("POST", "/wall", {}), (e) => {
+    assert.equal(e.status, 402);
+    assert.match(e.message, /failed: 402 - Insufficient credits\. You have 5 credits - this needs 20, so you are 15 short\./);
+    // 15 short: the cheapest pack covers it; the base here is a loopback, so the link is the public site
+    assert.match(e.message, /One tap to the right pack: 500 credits at https:\/\/aetherwavestudio\.com\/buy-credits\?buy=starter$/);
+    assert.equal(e.body.code, "insufficient_credits");
+    return true;
+  });
+});
+
+test("a bigger shortfall gets the pack that covers it (bonus counted)", async () => {
+  await assert.rejects(client().request("POST", "/bigwall", {}), (e) => /1,100 credits at https:\/\/aetherwavestudio\.com\/buy-credits\?buy=popular$/.test(e.message));
+});
+
+test("pickTopupPack: cheapest that covers, else the biggest; bad ids never picked", () => {
+  assert.equal(pickTopupPack(BUNDLES, 0).id, "starter");
+  assert.equal(pickTopupPack(BUNDLES, 501).id, "popular");
+  assert.equal(pickTopupPack(BUNDLES, 1101).id, "artist");
+  assert.equal(pickTopupPack(BUNDLES, 999999).id, "artist");
+  assert.equal(pickTopupPack([{ id: "a b", credits: 9, priceUSD: 1 }], 1), null);
+  assert.equal(pickTopupPack([], 1), null);
+});
+
+test("other errors are untouched by the credit-wall wording", async () => {
+  await assert.rejects(client().request("POST", "/nope", {}), (e) => e.message === "AetherWave API /nope failed: 404 - nope");
 });

@@ -816,6 +816,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
 
+**0.5.4**: a "not enough credits" error now carries the platform's next step (how short you are) and a one-tap link to the right credit pack, the cheapest one that covers the shortfall.
+
 **0.5.3**: `aetherwave_generate_speech` waits 49 s (the platform's voice provider times out at 45 s, so a refunded call no longer reads as still running), and a failure says whether the credits were refunded (`state: "failed"`, `refunded`), or `state: "unknown"` when the connection dropped mid-call.
 
 **0.5.2**: `aetherwave_generate_music` adds Suno `V6` and makes it the default (the website default too). Same 20 credits as every other version.
