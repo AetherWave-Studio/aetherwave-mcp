@@ -96,6 +96,14 @@ async function audit(name, args, { est = 0, check = null, followKind = null, fol
     log(name, "-> (prior run)", old.result);
     return { ...old, body };
   }
+  /* --only means ONLY. Without a prior row for a tool that is not listed, it used to run anyway
+     (2026-11-11: a two-tool --only against a new --out file ran the whole suite and spent the cap). */
+  if (ONLY && !ONLY.has(name)) {
+    const row = { tool: name, args, est, result: "not run (--only)", ms: 0, credits: 0, note };
+    rows.push(row);
+    log(name, "->", row.result);
+    return { ...row, body: undefined };
+  }
   const row = { tool: name, args, est, result: "", ms: 0, credits: 0, note };
   rows.push(row);
   if (skip) { row.result = skip; log(name, "->", skip); return row; }
