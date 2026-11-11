@@ -7,3 +7,6 @@ dist/
 *.tsbuildinfo
 mcp-publisher.exe
 logs/
+
+# local Claude Code settings (per machine)
+.claude/settings.local.json

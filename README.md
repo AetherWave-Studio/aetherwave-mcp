@@ -11,7 +11,7 @@ One install. One token. Thirty-five default tools covering:
 - **Music** - Suno V3.5 / V4 / V4.5 / V5 / V5.5 / V6
 - **Image gen** - Grok Imagine, GPT Image 2, Seedream V4, Wan 2.7, Nano Banana 2, Flux 2, Qwen Image, Z-Image Turbo
 - **Image edit** - Grok Imagine I2I, Seedream V4 Edit, Flux Kontext, Wan 2.5 Spicy, Qwen Edit, GPT Image 1.5
-- **Image utility** - 2x / 4x upscale, Recraft background removal (with fal BiRefNet v2 fallback), Ideogram V3 Reframe
+- **Image utility** - 2x / 4x upscale, Recraft background removal (with fal BiRefNet v2 fallback), Reframe (outpaints to a new aspect ratio)
 - **Video** - Grok Imagine (KIE+fal fallback), Wan 2.7, Hailuo 02, Seedance Pro/Lite, Kling 2.6 (audio), VEO 3.1, Happy Horse
 - **Video utility** - Atlas upscaler (1080p/2K), rembg u2netp background removal, Luma Ray 2 Flash reframe
 - **Audio mastering** - 12 genre/style presets via the AetherWave Python service
@@ -112,7 +112,7 @@ AETHERWAVE_API_KEY=aw_live_... npx -y @aetherwave-studio/mcp
 | `aetherwave_generate_music` | Suno V6 by default. Two tracks per submission, lyrics + instrumental |
 | `aetherwave_edit_image` | I2I editing. Default `grok-imagine-i2i` (10 cr, one image) |
 | `aetherwave_upscale_image` | 2x or 4x upscale, 4 cr |
-| `aetherwave_reframe_image` | Ideogram V3 Reframe to a new aspect ratio (outpaints edges) |
+| `aetherwave_reframe_image` | Reframe to a new aspect ratio (outpaints edges, 12 cr flat) |
 | `aetherwave_remove_background` | Recraft primary + fal BiRefNet v2 fallback (auto failover). Output auto-saved to gallery |
 | `aetherwave_upscale_video` | Atlas (1080p, 2K) or BytePlus (1080p to 8K) video upscale |
 | `aetherwave_remove_background_video` | Frame-by-frame bg removal via rembg u2netp. Transparent WebM or solid color output. 2 cr/sec |
@@ -463,13 +463,13 @@ Credit cost scales with source resolution × factor.
 
 ### `aetherwave_reframe_image`
 
-Ideogram V3 Reframe. Outpaints edges to fit a new aspect ratio.
+Reframe. Outpaints edges to fit a new aspect ratio: the source is kept whole and centred, new picture is painted on the two sides that grow, and nothing is cropped. **12 credits per image, flat.** The output size follows the source (capped at 4096 px on the long edge), so resize afterwards if you need exact pixels.
 
 | Param | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
 | `imageUrl` | string | yes | - | Public URL of source image |
-| `aspectRatio` | string | yes | - | Target ratio: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9` |
-| `speed` | enum | no | `balanced` | `turbo` (5 cr), `balanced` (10 cr), `quality` (14 cr) |
+| `aspectRatio` | enum | yes | - | `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `21:9`, `9:21` (each delivered exactly) |
+| `speed` | enum | no | - | Ignored since 0.5.5; kept so older calls still work. Every reframe is 12 cr |
 
 **Returns:** `{ taskId, state, images, autoSaved, creationIds }`
 
@@ -764,7 +764,7 @@ Typical costs:
 
 - **Image gen** - 2 cr (Z-Image Turbo) to 34 cr (premium models at 4K); default 6 cr for 2 images
 - **Image edit** - 6 cr to 34 cr; default 10 cr (Grok Imagine I2I)
-- **Image utility** - 4 cr (2x or 4x upscale), 5 cr (background removal), 5 / 10 / 14 cr (reframe by speed)
+- **Image utility** - 4 cr (2x or 4x upscale), 5 cr (background removal), 12 cr (reframe, flat)
 - **Video** - 4 cr/sec (Grok Imagine at 480p) up to 143 cr/sec (Seedance 2 at 1080p); VEO 3.1 is a fixed 42 / 84 / 350 cr per 8 s clip
 - **Music** - 20 cr per generation (2 tracks)
 - **Mastering** - 20 cr/track (free on Artist / Producer / Mogul / Ultimate)
@@ -794,8 +794,8 @@ Your balance is too low for the requested operation. Call `aetherwave_balance` t
 **"AetherWave generation timed out after Xs"**
 The provider is queueing. The job may still complete server-side - check the AetherWave gallery at https://aetherwavestudio.com/gallery.html. If timeouts persist for a particular model, try a different one (e.g. switch from `grok-imagine-t2v` to `wan-2-7-t2v`, or `gpt-image-1.5-i2i` to `grok-imagine-i2i`).
 
-**"Unprocessable Entity" on reframe**
-Ideogram's URL fetcher chokes on source URLs containing spaces, parentheses, or other special characters. Use clean URLs (try downloading and re-uploading to a clean R2 path if needed).
+**Reframe fails before it starts**
+The source must be a public https link the platform can download. Upload a local file with `aetherwave_upload_to_gallery` first and pass the URL it returns. An `aspectRatio` outside the list in the tool is refused before any credit is charged.
 
 **"internal error, please try again later" on remove_background**
 KIE Recraft transient outage. The tool will auto-fall-back to fal.ai BiRefNet v2 on retry, but a single call returning this error means both providers refused. Wait a minute and retry.
@@ -815,6 +815,8 @@ Not exposed via MCP. Soul Forge remains a consumer feature on the web at https:/
 ## Versioning
 
 This package follows semver. Tools that change behavior in a breaking way will bump the major version. New tools and additive parameters bump the minor version. Bug fixes bump the patch version.
+
+**0.5.5**: `aetherwave_reframe_image` matches the platform's new Reframe (since 2026-11-11): one flat price of 12 credits, eleven exact shapes (adds 3:2, 2:3, 5:4, 4:5, 9:21), and the ratio is sent as given. `speed` is accepted and ignored; the old 5 / 10 / 14 tiers are gone.
 
 **0.5.4**: a "not enough credits" error now carries the platform's next step (how short you are) and a one-tap link to the right credit pack, the cheapest one that covers the shortfall.
 

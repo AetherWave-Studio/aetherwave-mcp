@@ -32,6 +32,7 @@ import { fetchPublic, registerGalleryTools } from "./gallery.js";
 import { registerAudioTools } from "./audio.js";
 import { MAX_IMAGE_COUNT, imageCountBody } from "./image-count.js";
 import { musicRequestBody } from "./music-body.js";
+import { REFRAME_IMAGE_CREDITS, REFRAME_RATIOS, reframeImageBody } from "./reframe.js";
 import { CHARACTER_DEFAULT_IMAGE_MODEL, IMAGE_MAX_REFERENCES, VIDEO_MAX_REFERENCES, applyCharacter, resolveCharacter, type ResolvedCharacter } from "./characters.js";
 
 /* Read from package.json, never hand-maintained. This was pinned at "0.2.6"
@@ -783,49 +784,35 @@ If the user simply says "edit this image" with no other signal, default to \`gro
     },
   );
 
-  // ─── reframe image (Ideogram V3) ─────────────────────────────────────────
+  // ─── reframe image (fal Bria Expand, flat price) ─────────────────────────
   server.registerTool(
     "aetherwave_reframe_image",
     {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-      title: "Reframe image to a new aspect ratio (Ideogram V3 Reframe)",
+      title: "Reframe image to a new aspect ratio",
       description:
-        "Reframes an image to a new aspect ratio by intelligently outpainting the edges. Pass a public `imageUrl` and the target `aspectRatio` ('16:9', '9:16', '1:1', '4:3', '3:4', etc.). Three speed tiers: 'turbo' (5 cr, fast), 'balanced' (10 cr, default), 'quality' (14 cr, slowest, best edges). Returns the reframed image URL." + RETURNS_NOTE,
+        `Reframes an image to a new aspect ratio by painting new picture onto the edges. ${REFRAME_IMAGE_CREDITS} credits per image, one flat price. Pass a public https \`imageUrl\` and the target \`aspectRatio\`. ` +
+        "The source is kept whole and centred and nothing is cropped: new picture is added on the two sides that grow. The output size follows the source (a 2048 px wide source comes back 2048 px wide), capped at 4096 px on the long edge, so resize afterwards if you need exact pixels. Returns the reframed image URL." + RETURNS_NOTE,
       inputSchema: {
         imageUrl: z
           .string()
           .url()
-          .describe("Public URL of the source image."),
+          .describe("Public https URL of the source image."),
         aspectRatio: z
-          .string()
-          .describe("Target aspect ratio (e.g. '16:9', '9:16', '1:1', '4:3', '3:4', '21:9')."),
+          .enum(REFRAME_RATIOS)
+          .describe("Target aspect ratio. Each of these is delivered exactly."),
         speed: z
           .enum(["turbo", "balanced", "quality"])
           .optional()
-          .describe("Rendering speed. 'turbo'=5cr, 'balanced'=10cr (default), 'quality'=14cr."),
+          .describe(`Ignored. Kept so older calls still work; every reframe costs ${REFRAME_IMAGE_CREDITS} credits.`),
         ...waitArgs,
       },
     },
     async (args) => {
       try {
-        // Ideogram V3 Reframe only accepts preset image_size names. Translate
-        // human-readable aspect ratios into Ideogram's allowed presets so the
-        // upstream call doesn't 422.
-        const presetMap: Record<string, string> = {
-          "1:1": "square_hd",
-          "16:9": "landscape_16_9",
-          "9:16": "portrait_16_9",
-          "4:3": "landscape_4_3",
-          "3:4": "portrait_4_3",
-        };
-        const imageSize = presetMap[args.aspectRatio] || args.aspectRatio;
         const { status, taskId, running } = await client.submitAndPoll<any>({
           submitPath: "/api/reframe-image",
-          submitBody: {
-            imageUrl: args.imageUrl,
-            image_size: imageSize,
-            speed: (args.speed || "balanced").toUpperCase(),
-          },
+          submitBody: reframeImageBody(args),
           statusPath: (id) => `/api/generate-image/status/${id}`,
           timeoutMs: 6 * 60_000,
           softDeadlineMs: softDeadlineFor(args, 6 * 60_000),
