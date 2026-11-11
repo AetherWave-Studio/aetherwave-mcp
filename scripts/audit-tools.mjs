@@ -175,7 +175,7 @@ if (gen.body?.taskId) {
 await audit("aetherwave_edit_image", { prompt: "make the waveform gold", imageUrl, model: "grok-imagine-i2i" }, { est: 6, followKind: "image", check: (b) => (b.images?.length || b.imageUrls?.length ? null : "no images"), skip: imageUrl ? null : "not run (no source image)" });
 await audit("aetherwave_upscale_image", { imageUrl, upscaleFactor: "2x" }, { est: 12, followKind: "image", check: (b) => (b.images?.length || b.imageUrls?.length ? null : "no images"), skip: imageUrl ? null : "not run (no source image)" });
 await audit("aetherwave_remove_background", { imageUrl }, { est: 5, followKind: "image", check: (b) => (b.images?.length || b.imageUrls?.length ? null : "no images"), skip: imageUrl ? null : "not run (no source image)" });
-await audit("aetherwave_reframe_image", { imageUrl, aspectRatio: "16:9", speed: "turbo" }, { est: 5, followKind: "image", check: (b) => (b.images?.length || b.imageUrls?.length ? null : "no images"), skip: imageUrl ? null : "not run (no source image)" });
+await audit("aetherwave_reframe_image", { imageUrl, aspectRatio: "16:9" }, { est: 12, followKind: "image", check: (b) => (b.images?.length || b.imageUrls?.length ? null : "no images"), skip: imageUrl ? null : "not run (no source image)" });
 
 // ─── video + video edits (3 s gallery clip keeps per-second tools cheap) ───
 await audit("aetherwave_generate_video", { prompt: PROMPT + ", slow camera push in", model: "grok-imagine-t2v", duration: 6, resolution: "480p", aspectRatio: "16:9" }, {
